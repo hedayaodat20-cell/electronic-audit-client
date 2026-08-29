@@ -1172,7 +1172,9 @@
 
 <script>
 /* =========================================================
-   SUPABASE CONFIGURATION
+   ELECTRONIC AUDIT PORTAL
+   CLIENT JAVASCRIPT
+   Unified Supabase version
 ========================================================= */
 
 const SUPABASE_URL =
@@ -1180,11 +1182,6 @@ const SUPABASE_URL =
 
 const SUPABASE_KEY =
     "sb_publishable_r6Pl1Cr0_wypoL1H93lt_g_-BBj_6_u";
-
-
-/* =========================================================
-   SUPABASE CLIENT
-========================================================= */
 
 if (!window.supabase) {
     throw new Error("Supabase library failed to load.");
@@ -1198,45 +1195,34 @@ const supabaseClient =
 
 
 /* =========================================================
-   APPLICATION STATE
+   STATE
 ========================================================= */
+
+let currentClient = null;
 
 let documents = [];
 let documentRequests = [];
-let selectedFiles = [];
-let selectedRequestId = null;
-let currentFilter = "all";
-let activeModalDocId = null;
-let currentClient = null;
-
-
-/* =========================================================
-   REALTIME
-========================================================= */
-
-let documentsRealtimeChannel = null;
-let requestsRealtimeChannel = null;
-let messagesRealtimeChannel = null;
-
-
-/* =========================================================
-   NOTIFICATIONS
-========================================================= */
-
-let clientNotifications = [];
-let notificationStorageKey = "";
-
-
-/* =========================================================
-   MESSAGES
-========================================================= */
 
 let clientMessages = [];
 let unreadMessagesCount = 0;
 
+let clientNotifications = [];
+
+let selectedFiles = [];
+let selectedRequestId = null;
+let currentFilter = "all";
+let activeModalDocId = null;
+
+let documentsRealtimeChannel = null;
+let requestsRealtimeChannel = null;
+let messagesRealtimeChannel = null;
+let notificationsRealtimeChannel = null;
+
+let toastTimer = null;
+
 
 /* =========================================================
-   INITIALIZATION
+   DOM READY
 ========================================================= */
 
 document.addEventListener(
@@ -1247,20 +1233,16 @@ document.addEventListener(
 
             lucide.createIcons();
 
-            const loginForm =
-                document.getElementById("loginForm");
-
-            if (loginForm) {
-
-                loginForm.addEventListener(
+            document
+                .getElementById("loginForm")
+                ?.addEventListener(
                     "submit",
                     handleLogin
                 );
-            }
 
-            setupDragAndDrop();
-            setupNotificationEvents();
             setupMessageEvents();
+            setupNotificationEvents();
+            setupDragAndDrop();
 
             filterDocuments("all");
 
@@ -1273,44 +1255,13 @@ document.addEventListener(
                 error
             );
 
-            setLoading(false);
+            showToast(
+                error.message ||
+                "حدث خطأ أثناء تشغيل البوابة"
+            );
         }
     }
 );
-
-
-/* =========================================================
-   LOADING
-========================================================= */
-
-function setLoading(
-    show,
-    text = "جارٍ التحميل..."
-) {
-
-    const overlay =
-        document.getElementById(
-            "loadingOverlay"
-        );
-
-    const loadingText =
-        document.getElementById(
-            "loadingText"
-        );
-
-    if (loadingText) {
-        loadingText.textContent = text;
-    }
-
-    if (!overlay) {
-        return;
-    }
-
-    overlay.classList.toggle(
-        "show",
-        Boolean(show)
-    );
-}
 
 
 /* =========================================================
@@ -1328,67 +1279,35 @@ async function checkExistingSession() {
             await supabaseClient.auth.getSession();
 
         if (error) {
-
-            console.error(
-                "SESSION ERROR:",
-                error
-            );
-
-            showToast(
-                "تعذر استعادة الجلسة"
-            );
-
-            return;
+            throw error;
         }
 
         const session =
             data?.session;
 
-        if (
-            !session ||
-            !session.user
-        ) {
-
+        if (!session?.user) {
             return;
         }
 
         setLoading(
             true,
-            "جارٍ استعادة جلسة الدخول..."
+            "جارٍ استعادة الجلسة..."
         );
 
-        const loaded =
-            await loadCurrentClient(
-                session.user.id
-            );
-
-        if (!loaded) {
-
-            await supabaseClient.auth.signOut();
-
-            return;
-        }
-
-        await loadClientData();
-
-        await initializeClientNotifications();
-
-        await loadClientMessages();
-
-        await startClientRealtime();
-
-        showPortal();
+        await openClientSession(
+            session.user.id
+        );
 
     } catch (error) {
 
         console.error(
-            "CHECK SESSION ERROR:",
+            "SESSION ERROR:",
             error
         );
 
         showToast(
-            error?.message ||
-            "حدث خطأ أثناء استعادة الجلسة"
+            error.message ||
+            "تعذر استعادة الجلسة"
         );
 
     } finally {
@@ -1398,36 +1317,67 @@ async function checkExistingSession() {
 }
 
 
+async function openClientSession(
+    userId
+) {
+
+    const loaded =
+        await loadCurrentClient(
+            userId
+        );
+
+    if (!loaded) {
+
+        await supabaseClient.auth.signOut();
+
+        return false;
+    }
+
+    await loadClientData();
+
+    await loadClientMessages();
+
+    await loadClientNotifications();
+
+    await startClientRealtime();
+
+    showPortal();
+
+    return true;
+}
+
+
 /* =========================================================
    LOGIN
 ========================================================= */
 
-async function handleLogin(event) {
+async function handleLogin(
+    event
+) {
 
     event.preventDefault();
 
-    const emailInput =
-        document.getElementById(
-            "loginEmail"
-        );
+    const email =
+        document
+            .getElementById("loginEmail")
+            ?.value
+            ?.trim()
+            ?.toLowerCase() || "";
 
-    const passwordInput =
-        document.getElementById(
-            "loginPassword"
-        );
+    const password =
+        document
+            .getElementById("loginPassword")
+            ?.value || "";
 
-    const loginButton =
+    const button =
         document.getElementById(
             "loginButton"
         );
 
-    const email =
-        emailInput?.value.trim() || "";
-
-    const password =
-        passwordInput?.value || "";
-
-    if (!email || !password) {
+    if (
+        !email ||
+        !password
+    ) {
 
         showToast(
             "يرجى إدخال البريد الإلكتروني وكلمة المرور"
@@ -1438,18 +1388,8 @@ async function handleLogin(event) {
 
     try {
 
-        if (loginButton) {
-
-            loginButton.disabled = true;
-            loginButton.style.opacity = "0.7";
-
-            const span =
-                loginButton.querySelector("span");
-
-            if (span) {
-                span.textContent =
-                    "جارٍ التحقق...";
-            }
+        if (button) {
+            button.disabled = true;
         }
 
         setLoading(
@@ -1462,58 +1402,25 @@ async function handleLogin(event) {
             error
         } =
             await supabaseClient.auth.signInWithPassword({
+
                 email,
                 password
             });
 
         if (error) {
-
-            console.error(
-                "LOGIN ERROR:",
-                error
-            );
-
-            showToast(
-                error.message ||
-                "فشل تسجيل الدخول"
-            );
-
-            return;
+            throw error;
         }
 
-        const user =
-            data?.user;
+        if (!data?.user) {
 
-        if (!user) {
-
-            showToast(
+            throw new Error(
                 "تعذر الحصول على بيانات الحساب"
             );
-
-            return;
         }
 
-        const loaded =
-            await loadCurrentClient(
-                user.id
-            );
-
-        if (!loaded) {
-
-            await supabaseClient.auth.signOut();
-
-            return;
-        }
-
-        await loadClientData();
-
-        await initializeClientNotifications();
-
-        await loadClientMessages();
-
-        await startClientRealtime();
-
-        showPortal();
+        await openClientSession(
+            data.user.id
+        );
 
         showToast(
             `مرحبًا بك ${currentClient?.name || ""}`
@@ -1527,26 +1434,16 @@ async function handleLogin(event) {
         );
 
         showToast(
-            error?.message ||
-            "حدث خطأ أثناء تسجيل الدخول"
+            error.message ||
+            "فشل تسجيل الدخول"
         );
 
     } finally {
 
         setLoading(false);
 
-        if (loginButton) {
-
-            loginButton.disabled = false;
-            loginButton.style.opacity = "1";
-
-            const span =
-                loginButton.querySelector("span");
-
-            if (span) {
-                span.textContent =
-                    "دخول البوابة";
-            }
+        if (button) {
+            button.disabled = false;
         }
     }
 }
@@ -1556,18 +1453,11 @@ async function handleLogin(event) {
    LOAD CLIENT
 ========================================================= */
 
-async function loadCurrentClient(userId) {
+async function loadCurrentClient(
+    userId
+) {
 
     try {
-
-        if (!userId) {
-
-            showToast(
-                "تعذر تحديد حساب المستخدم"
-            );
-
-            return false;
-        }
 
         const {
             data,
@@ -1576,28 +1466,20 @@ async function loadCurrentClient(userId) {
             await supabaseClient
                 .from("clients")
                 .select("*")
-                .eq("user_id", userId)
+                .eq(
+                    "user_id",
+                    userId
+                )
                 .maybeSingle();
 
         if (error) {
-
-            console.error(
-                "CLIENT LOOKUP ERROR:",
-                error
-            );
-
-            showToast(
-                error.message ||
-                "تعذر تحميل ملف العميل"
-            );
-
-            return false;
+            throw error;
         }
 
         if (!data) {
 
             showToast(
-                "هذا الحساب غير مرتبط بملف عميل في النظام"
+                "هذا الحساب غير مرتبط بملف عميل"
             );
 
             return false;
@@ -1616,13 +1498,13 @@ async function loadCurrentClient(userId) {
     } catch (error) {
 
         console.error(
-            "LOAD CLIENT ERROR:",
+            "CLIENT LOAD ERROR:",
             error
         );
 
         showToast(
-            error?.message ||
-            "حدث خطأ أثناء تحميل بيانات العميل"
+            error.message ||
+            "تعذر تحميل ملف العميل"
         );
 
         return false;
@@ -1631,25 +1513,22 @@ async function loadCurrentClient(userId) {
 
 
 /* =========================================================
-   LOAD CLIENT DATA
+   LOAD DOCUMENT DATA
 ========================================================= */
 
 async function loadClientData() {
 
-    if (
-        !currentClient ||
-        !currentClient.id
-    ) {
+    if (!currentClient?.id) {
         return;
     }
 
-    try {
+    const [
+        requestsResult,
+        documentsResult
+    ] =
+        await Promise.all([
 
-        const {
-            data: requests,
-            error: requestsError
-        } =
-            await supabaseClient
+            supabaseClient
                 .from("document_requests")
                 .select("*")
                 .eq(
@@ -1661,34 +1540,9 @@ async function loadClientData() {
                     {
                         ascending: true
                     }
-                );
+                ),
 
-        if (requestsError) {
-
-            console.error(
-                "REQUESTS ERROR:",
-                requestsError
-            );
-
-            showToast(
-                requestsError.message ||
-                "تعذر تحميل طلبات المستندات"
-            );
-
-            documentRequests = [];
-
-        } else {
-
-            documentRequests =
-                requests || [];
-        }
-
-
-        const {
-            data: docs,
-            error: docsError
-        } =
-            await supabaseClient
+            supabaseClient
                 .from("documents")
                 .select("*")
                 .eq(
@@ -1700,260 +1554,147 @@ async function loadClientData() {
                     {
                         ascending: false
                     }
-                );
+                )
+        ]);
 
-        if (docsError) {
-
-            console.error(
-                "DOCUMENTS ERROR:",
-                docsError
-            );
-
-            showToast(
-                docsError.message ||
-                "تعذر تحميل المستندات"
-            );
-
-            documents = [];
-
-        } else {
-
-            documents =
-                (docs || []).map(
-                    doc => {
-
-                        const request =
-                            documentRequests.find(
-                                req =>
-                                    String(req.id) ===
-                                    String(doc.request_id)
-                            );
-
-                        return {
-
-                            id:
-                                doc.id,
-
-                            name:
-                                doc.name ||
-                                "مستند",
-
-                            uploadDate:
-                                formatSupabaseDate(
-                                    doc.upload_date
-                                ),
-
-                            status:
-                                doc.status ||
-                                "uploaded",
-
-                            requestId:
-                                doc.request_id,
-
-                            requestName:
-                                request?.title ||
-                                "طلب مستند",
-
-                            auditorNotes:
-                                doc.auditor_notes ||
-                                "لا توجد ملاحظات حالية.",
-
-                            fileSize:
-                                formatFileSize(
-                                    doc.file_size
-                                ),
-
-                            filePath:
-                                doc.file_path ||
-                                "",
-
-                            uploadedBy:
-                                doc.uploaded_by ||
-                                null,
-
-                            mimeType:
-                                doc.mime_type ||
-                                "",
-
-                            rawUploadDate:
-                                doc.upload_date
-                        };
-                    }
-                );
-        }
-
-        renderRequests();
-        updateStats();
-        renderDocuments();
-
-    } catch (error) {
-
-        console.error(
-            "LOAD CLIENT DATA ERROR:",
-            error
-        );
-
-        showToast(
-            error?.message ||
-            "حدث خطأ أثناء تحميل بيانات البوابة"
-        );
+    if (requestsResult.error) {
+        throw requestsResult.error;
     }
+
+    if (documentsResult.error) {
+        throw documentsResult.error;
+    }
+
+    documentRequests =
+        requestsResult.data || [];
+
+    documents =
+        (documentsResult.data || [])
+            .map(
+                function (doc) {
+
+                    const request =
+                        documentRequests.find(
+                            req =>
+                                String(req.id) ===
+                                String(doc.request_id)
+                        );
+
+                    return {
+
+                        id:
+                            doc.id,
+
+                        name:
+                            doc.name ||
+                            "مستند",
+
+                        uploadDate:
+                            formatSupabaseDate(
+                                doc.upload_date
+                            ),
+
+                        rawUploadDate:
+                            doc.upload_date,
+
+                        status:
+                            doc.status ||
+                            "uploaded",
+
+                        requestId:
+                            doc.request_id,
+
+                        requestName:
+                            request?.title ||
+                            "طلب مستند",
+
+                        auditorNotes:
+                            doc.auditor_notes ||
+                            "لا توجد ملاحظات حالية.",
+
+                        fileSize:
+                            formatFileSize(
+                                doc.file_size
+                            ),
+
+                        filePath:
+                            doc.file_path ||
+                            "",
+
+                        uploadedBy:
+                            doc.uploaded_by ||
+                            null,
+
+                        mimeType:
+                            doc.mime_type ||
+                            ""
+                    };
+                }
+            );
+
+    renderRequests();
+    updateStats();
+    renderDocuments();
 }
 
 
 /* =========================================================
-   NOTIFICATIONS STORAGE
+   NOTIFICATIONS
 ========================================================= */
 
-async function initializeClientNotifications() {
+async function loadClientNotifications() {
 
     if (
-        !currentClient ||
-        !currentClient.id
+        !currentClient?.id ||
+        !currentClient?.user_id
     ) {
         return;
     }
 
-    notificationStorageKey =
-        `client_notifications_${currentClient.id}`;
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("notifications")
+            .select(
+                "id,user_id,client_id,audience,title,message,read,created_at"
+            )
+            .eq(
+                "user_id",
+                currentClient.user_id
+            )
+            .eq(
+                "client_id",
+                currentClient.id
+            )
+            .eq(
+                "audience",
+                "client"
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: false
+                }
+            )
+            .limit(50);
 
-    try {
-
-        const saved =
-            localStorage.getItem(
-                notificationStorageKey
-            );
-
-        if (saved) {
-
-            clientNotifications =
-                JSON.parse(saved);
-
-        } else {
-
-            clientNotifications = [];
-        }
-
-    } catch (error) {
+    if (error) {
 
         console.error(
-            "NOTIFICATION STORAGE ERROR:",
+            "NOTIFICATIONS LOAD ERROR:",
             error
         );
 
-        clientNotifications = [];
-    }
-
-    renderNotifications();
-    updateNotificationBadge();
-}
-
-
-function saveClientNotifications() {
-
-    if (!notificationStorageKey) {
         return;
     }
-
-    try {
-
-        localStorage.setItem(
-            notificationStorageKey,
-            JSON.stringify(
-                clientNotifications.slice(0, 50)
-            )
-        );
-
-    } catch (error) {
-
-        console.error(
-            "SAVE NOTIFICATIONS ERROR:",
-            error
-        );
-    }
-}
-
-
-function addClientNotification(
-    title,
-    message
-) {
-
-    const notification = {
-
-        id:
-            `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-
-        title:
-            title,
-
-        message:
-            message,
-
-        timestamp:
-            new Date().toISOString(),
-
-        read:
-            false
-    };
-
-    clientNotifications.unshift(
-        notification
-    );
 
     clientNotifications =
-        clientNotifications.slice(
-            0,
-            50
-        );
-
-    saveClientNotifications();
+        data || [];
 
     renderNotifications();
     updateNotificationBadge();
-
-    showToast(
-        `${title}${message ? " • " + message : ""}`
-    );
-}
-
-
-function updateNotificationBadge() {
-
-    const badge =
-        document.getElementById(
-            "notificationBadge"
-        );
-
-    if (!badge) {
-        return;
-    }
-
-    const unread =
-        clientNotifications.filter(
-            item => !item.read
-        ).length;
-
-    if (unread > 0) {
-
-        badge.textContent =
-            unread > 99
-                ? "99+"
-                : unread;
-
-        badge.classList.remove(
-            "hidden"
-        );
-
-    } else {
-
-        badge.textContent =
-            "0";
-
-        badge.classList.add(
-            "hidden"
-        );
-    }
 }
 
 
@@ -1969,12 +1710,10 @@ function renderNotifications() {
     }
 
     if (
-        clientNotifications.length ===
-        0
+        clientNotifications.length === 0
     ) {
 
         container.innerHTML = `
-
             <div class="text-center py-10 px-5">
 
                 <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 mx-auto mb-4 flex items-center justify-center text-cyan-300">
@@ -1998,65 +1737,261 @@ function renderNotifications() {
         `;
 
         lucide.createIcons();
+
         return;
     }
 
     container.innerHTML =
         clientNotifications
-            .slice(0, 30)
             .map(
-                notification => `
+                function (notification) {
 
-                    <div
-                        class="notification-item ${notification.read ? "" : "unread"}"
-                        onclick="markNotificationRead('${escapeAttribute(notification.id)}')"
-                    >
+                    return `
 
-                        <strong>
-                            ${escapeHTML(
-                                notification.title
-                            )}
-                        </strong>
+                        <div
+                            class="notification-item ${
+                                notification.read
+                                    ? ""
+                                    : "unread"
+                            }"
+                            data-id="${escapeAttribute(
+                                notification.id
+                            )}"
+                        >
 
-                        <p>
-                            ${escapeHTML(
-                                notification.message || ""
-                            )}
-                        </p>
+                            <strong>
+                                ${escapeHTML(
+                                    notification.title
+                                )}
+                            </strong>
 
-                        <time>
-                            ${formatSupabaseDate(
-                                notification.timestamp
-                            )}
-                        </time>
+                            <p>
+                                ${escapeHTML(
+                                    notification.message ||
+                                    ""
+                                )}
+                            </p>
 
-                    </div>
-                `
+                            <time>
+                                ${formatSupabaseDate(
+                                    notification.created_at
+                                )}
+                            </time>
+
+                        </div>
+                    `;
+                }
             )
             .join("");
+
+    container
+        .querySelectorAll(
+            ".notification-item[data-id]"
+        )
+        .forEach(
+            function (item) {
+
+                item.addEventListener(
+                    "click",
+                    function () {
+
+                        markNotificationRead(
+                            item.dataset.id
+                        );
+                    }
+                );
+            }
+        );
 
     lucide.createIcons();
 }
 
 
-function markNotificationRead(id) {
+function updateNotificationBadge() {
 
-    const target =
-        clientNotifications.find(
-            item =>
-                String(item.id) ===
-                String(id)
+    const badge =
+        document.getElementById(
+            "notificationBadge"
         );
 
-    if (!target) {
+    if (!badge) {
         return;
     }
 
-    target.read = true;
+    const unread =
+        clientNotifications.filter(
+            item =>
+                !item.read
+        ).length;
 
-    saveClientNotifications();
+    badge.textContent =
+        unread > 99
+            ? "99+"
+            : String(unread);
+
+    badge.classList.toggle(
+        "hidden",
+        unread === 0
+    );
+}
+
+
+async function markNotificationRead(
+    id
+) {
+
+    const {
+        error
+    } =
+        await supabaseClient
+            .from("notifications")
+            .update({
+                read: true
+            })
+            .eq(
+                "id",
+                id
+            )
+            .eq(
+                "user_id",
+                currentClient.user_id
+            )
+            .eq(
+                "client_id",
+                currentClient.id
+            )
+            .eq(
+                "audience",
+                "client"
+            );
+
+    if (error) {
+
+        console.error(
+            "NOTIFICATION READ ERROR:",
+            error
+        );
+
+        return;
+    }
+
+    const item =
+        clientNotifications.find(
+            n =>
+                String(n.id) ===
+                String(id)
+        );
+
+    if (item) {
+        item.read = true;
+    }
+
     renderNotifications();
     updateNotificationBadge();
+}
+
+
+async function markAllNotificationsRead() {
+
+    if (!currentClient?.id) {
+        return;
+    }
+
+    const {
+        error
+    } =
+        await supabaseClient
+            .from("notifications")
+            .update({
+                read: true
+            })
+            .eq(
+                "user_id",
+                currentClient.user_id
+            )
+            .eq(
+                "client_id",
+                currentClient.id
+            )
+            .eq(
+                "audience",
+                "client"
+            )
+            .eq(
+                "read",
+                false
+            );
+
+    if (error) {
+
+        console.error(
+            "MARK NOTIFICATIONS READ ERROR:",
+            error
+        );
+
+        return;
+    }
+
+    clientNotifications =
+        clientNotifications.map(
+            function (item) {
+
+                return {
+                    ...item,
+                    read: true
+                };
+            }
+        );
+
+    renderNotifications();
+    updateNotificationBadge();
+}
+
+
+async function clearNotifications() {
+
+    if (!currentClient?.id) {
+        return;
+    }
+
+    const {
+        error
+    } =
+        await supabaseClient
+            .from("notifications")
+            .delete()
+            .eq(
+                "user_id",
+                currentClient.user_id
+            )
+            .eq(
+                "client_id",
+                currentClient.id
+            )
+            .eq(
+                "audience",
+                "client"
+            );
+
+    if (error) {
+
+        showToast(
+            error.message ||
+            "تعذر مسح الإشعارات"
+        );
+
+        return;
+    }
+
+    clientNotifications =
+        [];
+
+    renderNotifications();
+    updateNotificationBadge();
+
+    showToast(
+        "تم مسح الإشعارات"
+    );
 }
 
 
@@ -2067,11 +2002,22 @@ function setupNotificationEvents() {
             "notificationButton"
         );
 
-    if (button) {
+    const clear =
+        document.getElementById(
+            "clearNotifications"
+        );
+
+    if (
+        button &&
+        !button.dataset.bound
+    ) {
+
+        button.dataset.bound =
+            "1";
 
         button.addEventListener(
             "click",
-            function (event) {
+            async function (event) {
 
                 event.stopPropagation();
 
@@ -2080,57 +2026,53 @@ function setupNotificationEvents() {
                         "notificationPanel"
                     );
 
+                document
+                    .getElementById(
+                        "messagePanel"
+                    )
+                    ?.classList.remove(
+                        "show"
+                    );
+
                 if (!panel) {
                     return;
                 }
 
-                const willOpen =
+                const opening =
                     !panel.classList.contains(
                         "show"
                     );
 
                 panel.classList.toggle(
-                    "show"
+                    "show",
+                    opening
                 );
 
-                if (willOpen) {
+                if (opening) {
 
-                    clientNotifications.forEach(
-                        notification => {
-                            notification.read = true;
-                        }
-                    );
+                    await loadClientNotifications();
 
-                    saveClientNotifications();
-                    renderNotifications();
-                    updateNotificationBadge();
+                    await markAllNotificationsRead();
                 }
             }
         );
     }
 
-    const clear =
-        document.getElementById(
-            "clearNotifications"
-        );
+    if (
+        clear &&
+        !clear.dataset.bound
+    ) {
 
-    if (clear) {
+        clear.dataset.bound =
+            "1";
 
         clear.addEventListener(
             "click",
-            function (event) {
+            async function (event) {
 
                 event.stopPropagation();
 
-                clientNotifications = [];
-
-                saveClientNotifications();
-                renderNotifications();
-                updateNotificationBadge();
-
-                showToast(
-                    "تم مسح الإشعارات"
-                );
+                await clearNotifications();
             }
         );
     }
@@ -2139,6 +2081,7 @@ function setupNotificationEvents() {
 
 /* =========================================================
    MESSAGES
+   IMPORTANT: ONLY client_messages
 ========================================================= */
 
 async function loadClientMessages() {
@@ -2147,60 +2090,62 @@ async function loadClientMessages() {
         return;
     }
 
-    try {
-
-        const {
-            data,
-            error
-        } =
-            await supabaseClient
-                .from("messages")
-                .select("*")
-                .eq(
-                    "client_id",
-                    currentClient.id
-                )
-                .order(
-                    "created_at",
-                    {
-                        ascending: true
-                    }
-                );
-
-        if (error) {
-
-            console.error(
-                "MESSAGES LOAD ERROR:",
-                error
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("client_messages")
+            .select(
+                "id,client_id,sender,sender_user_id,message,read,created_at"
+            )
+            .eq(
+                "client_id",
+                currentClient.id
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: true
+                }
             );
 
-            showToast(
-                "تعذر تحميل الرسائل"
-            );
-
-            return;
-        }
-
-        clientMessages =
-            data || [];
-
-        unreadMessagesCount =
-            clientMessages.filter(
-                message =>
-                    message.sender_role === "auditor" &&
-                    !message.read_at
-            ).length;
-
-        renderClientMessages();
-        updateMessageBadge();
-
-    } catch (error) {
+    if (error) {
 
         console.error(
-            "LOAD CLIENT MESSAGES ERROR:",
+            "CLIENT MESSAGES LOAD ERROR:",
             error
         );
+
+        showToast(
+            error.message ||
+            "تعذر تحميل الرسائل"
+        );
+
+        return;
     }
+
+    clientMessages =
+        data || [];
+
+    unreadMessagesCount =
+        clientMessages.filter(
+            function (message) {
+
+                return (
+                    (
+                        message.sender ===
+                            "auditor" ||
+                        message.sender ===
+                            "admin"
+                    ) &&
+                    !message.read
+                );
+            }
+        ).length;
+
+    renderClientMessages();
+    updateMessageBadge();
 }
 
 
@@ -2215,10 +2160,11 @@ function renderClientMessages() {
         return;
     }
 
-    if (clientMessages.length === 0) {
+    if (
+        clientMessages.length === 0
+    ) {
 
         container.innerHTML = `
-
             <div class="text-center py-10 px-4">
 
                 <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 mx-auto mb-4 flex items-center justify-center text-cyan-300">
@@ -2239,20 +2185,21 @@ function renderClientMessages() {
                 </p>
 
             </div>
-
         `;
 
         lucide.createIcons();
+
         return;
     }
 
     container.innerHTML =
         clientMessages
             .map(
-                message => {
+                function (message) {
 
                     const isClient =
-                        message.sender_role === "client";
+                        message.sender ===
+                        "client";
 
                     return `
 
@@ -2316,26 +2263,34 @@ function updateMessageBadge() {
         return;
     }
 
-    if (unreadMessagesCount > 0) {
+    const unread =
+        clientMessages.filter(
+            function (message) {
 
-        badge.textContent =
-            unreadMessagesCount > 99
-                ? "99+"
-                : unreadMessagesCount;
+                return (
+                    (
+                        message.sender ===
+                            "auditor" ||
+                        message.sender ===
+                            "admin"
+                    ) &&
+                    !message.read
+                );
+            }
+        ).length;
 
-        badge.classList.remove(
-            "hidden"
-        );
+    unreadMessagesCount =
+        unread;
 
-    } else {
+    badge.textContent =
+        unread > 99
+            ? "99+"
+            : String(unread);
 
-        badge.textContent =
-            "0";
-
-        badge.classList.add(
-            "hidden"
-        );
-    }
+    badge.classList.toggle(
+        "hidden",
+        unread === 0
+    );
 }
 
 
@@ -2360,10 +2315,13 @@ async function sendClientMessage() {
             "sendMessageButton"
         );
 
-    const message =
-        input?.value.trim() || "";
+    const text =
+        String(
+            input?.value ||
+            ""
+        ).trim();
 
-    if (!message) {
+    if (!text) {
 
         showToast(
             "اكتب الرسالة أولًا"
@@ -2372,7 +2330,7 @@ async function sendClientMessage() {
         return;
     }
 
-    if (message.length > 2000) {
+    if (text.length > 2000) {
 
         showToast(
             "الرسالة طويلة جدًا"
@@ -2384,9 +2342,7 @@ async function sendClientMessage() {
     try {
 
         if (button) {
-
             button.disabled = true;
-            button.style.opacity = "0.7";
         }
 
         const {
@@ -2414,21 +2370,24 @@ async function sendClientMessage() {
             error
         } =
             await supabaseClient
-                .from("messages")
+                .from("client_messages")
                 .insert({
+
                     client_id:
                         currentClient.id,
 
-                    sender_id:
+                    sender_user_id:
                         user.id,
 
-                    sender_role:
+                    sender:
                         "client",
 
                     message:
-                        message
+                        text
                 })
-                .select()
+                .select(
+                    "id,client_id,sender,sender_user_id,message,read,created_at"
+                )
                 .single();
 
         if (error) {
@@ -2438,24 +2397,35 @@ async function sendClientMessage() {
         if (
             data &&
             !clientMessages.some(
-                item =>
-                    String(item.id) ===
+                row =>
+                    String(row.id) ===
                     String(data.id)
             )
         ) {
 
-            clientMessages.push(data);
+            clientMessages.push(
+                data
+            );
 
             clientMessages.sort(
-                (a, b) =>
-                    new Date(a.created_at) -
-                    new Date(b.created_at)
+                function (a, b) {
+
+                    return (
+                        new Date(
+                            a.created_at
+                        ) -
+                        new Date(
+                            b.created_at
+                        )
+                    );
+                }
             );
         }
 
         input.value = "";
 
         renderClientMessages();
+        updateMessageBadge();
 
         showToast(
             "تم إرسال الرسالة"
@@ -2464,21 +2434,19 @@ async function sendClientMessage() {
     } catch (error) {
 
         console.error(
-            "SEND MESSAGE ERROR:",
+            "SEND CLIENT MESSAGE ERROR:",
             error
         );
 
         showToast(
-            error?.message ||
+            error.message ||
             "تعذر إرسال الرسالة"
         );
 
     } finally {
 
         if (button) {
-
             button.disabled = false;
-            button.style.opacity = "1";
         }
     }
 }
@@ -2490,98 +2458,97 @@ async function markClientMessagesRead() {
         return;
     }
 
-    try {
+    const unreadIds =
+        clientMessages
+            .filter(
+                function (message) {
 
-        const unreadIds =
-            clientMessages
-                .filter(
-                    message =>
-                        message.sender_role === "auditor" &&
-                        !message.read_at
-                )
-                .map(
-                    message =>
-                        message.id
-                );
-
-        if (unreadIds.length === 0) {
-
-            unreadMessagesCount = 0;
-            updateMessageBadge();
-
-            return;
-        }
-
-        const now =
-            new Date().toISOString();
-
-        const {
-            error
-        } =
-            await supabaseClient
-                .from("messages")
-                .update({
-                    read_at: now
-                })
-                .in(
-                    "id",
-                    unreadIds
-                );
-
-        if (error) {
-
-            console.error(
-                "MARK READ ERROR:",
-                error
-            );
-
-            return;
-        }
-
-        clientMessages =
-            clientMessages.map(
-                message => {
-
-                    if (
-                        unreadIds.includes(
-                            message.id
-                        )
-                    ) {
-
-                        return {
-                            ...message,
-                            read_at: now
-                        };
-                    }
-
-                    return message;
+                    return (
+                        (
+                            message.sender ===
+                                "auditor" ||
+                            message.sender ===
+                                "admin"
+                        ) &&
+                        !message.read
+                    );
+                }
+            )
+            .map(
+                function (message) {
+                    return message.id;
                 }
             );
 
-        unreadMessagesCount = 0;
+    if (!unreadIds.length) {
 
         updateMessageBadge();
 
-    } catch (error) {
-
-        console.error(
-            "MARK CLIENT MESSAGES READ ERROR:",
-            error
-        );
+        return;
     }
+
+    const {
+        error
+    } =
+        await supabaseClient
+            .from("client_messages")
+            .update({
+                read: true
+            })
+            .in(
+                "id",
+                unreadIds
+            )
+            .eq(
+                "client_id",
+                currentClient.id
+            );
+
+    if (error) {
+
+        /*
+         * في حالة عدم وجود UPDATE policy للعميل،
+         * نبقي الرسائل ظاهرة ولا نكسر الواجهة.
+         */
+        console.warn(
+            "MESSAGE READ UPDATE:",
+            error.message
+        );
+
+        return;
+    }
+
+    clientMessages =
+        clientMessages.map(
+            function (message) {
+
+                return unreadIds.includes(
+                    message.id
+                )
+                    ? {
+                        ...message,
+                        read: true
+                    }
+                    : message;
+            }
+        );
+
+    unreadMessagesCount =
+        0;
+
+    updateMessageBadge();
 }
 
+
+/* =========================================================
+   MESSAGE EVENTS
+========================================================= */
 
 function setupMessageEvents() {
 
     const button =
         document.getElementById(
             "messageButton"
-        );
-
-    const panel =
-        document.getElementById(
-            "messagePanel"
         );
 
     const sendButton =
@@ -2594,41 +2561,55 @@ function setupMessageEvents() {
             "messageInput"
         );
 
-    if (button && panel) {
+    if (
+        button &&
+        !button.dataset.bound
+    ) {
+
+        button.dataset.bound =
+            "1";
 
         button.addEventListener(
             "click",
-            async function(event) {
+            async function (event) {
 
                 event.stopPropagation();
 
-                const notificationPanel =
+                const panel =
                     document.getElementById(
-                        "notificationPanel"
+                        "messagePanel"
                     );
 
-                if (notificationPanel) {
-
-                    notificationPanel.classList.remove(
+                document
+                    .getElementById(
+                        "notificationPanel"
+                    )
+                    ?.classList.remove(
                         "show"
                     );
+
+                if (!panel) {
+                    return;
                 }
 
-                const willOpen =
+                const opening =
                     !panel.classList.contains(
                         "show"
                     );
 
                 panel.classList.toggle(
-                    "show"
+                    "show",
+                    opening
                 );
 
-                if (willOpen) {
+                if (opening) {
+
+                    await loadClientMessages();
 
                     await markClientMessagesRead();
 
                     setTimeout(
-                        function() {
+                        function () {
 
                             const list =
                                 document.getElementById(
@@ -2642,14 +2623,20 @@ function setupMessageEvents() {
                             }
 
                         },
-                        60
+                        50
                     );
                 }
             }
         );
     }
 
-    if (sendButton) {
+    if (
+        sendButton &&
+        !sendButton.dataset.bound
+    ) {
+
+        sendButton.dataset.bound =
+            "1";
 
         sendButton.addEventListener(
             "click",
@@ -2657,14 +2644,21 @@ function setupMessageEvents() {
         );
     }
 
-    if (input) {
+    if (
+        input &&
+        !input.dataset.bound
+    ) {
+
+        input.dataset.bound =
+            "1";
 
         input.addEventListener(
             "keydown",
-            function(event) {
+            function (event) {
 
                 if (
-                    event.key === "Enter" &&
+                    event.key ===
+                        "Enter" &&
                     !event.shiftKey
                 ) {
 
@@ -2675,52 +2669,16 @@ function setupMessageEvents() {
             }
         );
     }
-
-    document.addEventListener(
-        "click",
-        function(event) {
-
-            const wrappers =
-                document.querySelectorAll(
-                    ".notification-wrapper"
-                );
-
-            wrappers.forEach(
-                wrapper => {
-
-                    const panel =
-                        wrapper.querySelector(
-                            ".notification-panel"
-                        );
-
-                    if (
-                        panel &&
-                        !wrapper.contains(
-                            event.target
-                        )
-                    ) {
-
-                        panel.classList.remove(
-                            "show"
-                        );
-                    }
-                }
-            );
-        }
-    );
 }
 
 
 /* =========================================================
-   REALTIME START
+   REALTIME
 ========================================================= */
 
 async function startClientRealtime() {
 
-    if (
-        !currentClient ||
-        !currentClient.id
-    ) {
+    if (!currentClient?.id) {
         return;
     }
 
@@ -2729,12 +2687,16 @@ async function startClientRealtime() {
     const clientId =
         currentClient.id;
 
+    const suffix =
+        Date.now();
 
-    /* DOCUMENTS */
+
+    /* ---------- DOCUMENTS ---------- */
+
     documentsRealtimeChannel =
         supabaseClient
             .channel(
-                `client_documents_${clientId}`
+                `client-documents-${clientId}-${suffix}`
             )
             .on(
                 "postgres_changes",
@@ -2745,134 +2707,29 @@ async function startClientRealtime() {
                     filter:
                         `client_id=eq.${clientId}`
                 },
-                async function(payload) {
+                async function () {
 
-                    console.log(
-                        "DOCUMENT REALTIME:",
-                        payload
-                    );
+                    await loadClientData();
 
-                    const eventType =
-                        payload?.eventType;
-
-                    const row =
-                        payload?.new || {};
-
-                    const oldRow =
-                        payload?.old || {};
-
-                    if (
-                        eventType === "INSERT"
-                    ) {
-
-                        await loadClientData();
-
-                        const currentUserId =
-                            await getCurrentUserId();
-
-                        if (
-                            String(
-                                row.uploaded_by || ""
-                            ) !==
-                            String(
-                                currentUserId || ""
-                            )
-                        ) {
-
-                            addClientNotification(
-                                "تم استلام مستند جديد",
-                                row.name ||
-                                "تمت إضافة مستند جديد."
-                            );
-                        }
-
-                        return;
-                    }
-
-
-                    if (
-                        eventType === "UPDATE"
-                    ) {
-
-                        const oldStatus =
-                            oldRow.status || null;
-
-                        const newStatus =
-                            row.status || null;
-
-                        await loadClientData();
-
-                        if (
-                            oldStatus !==
-                            newStatus
-                        ) {
-
-                            addClientNotification(
-                                "تم تحديث حالة المستند",
-                                `${row.name || "المستند"} • ${getClientDocumentStatusText(newStatus)}`
-                            );
-
-                        } else {
-
-                            addClientNotification(
-                                "تم تحديث مستند",
-                                row.name ||
-                                "تم تحديث أحد المستندات."
-                            );
-                        }
-
-                        if (
-                            activeModalDocId &&
-                            String(
-                                activeModalDocId
-                            ) ===
-                            String(
-                                row.id
-                            )
-                        ) {
-
-                            viewDocDetails(
-                                row.id
-                            );
-                        }
-
-                        return;
-                    }
-
-
-                    if (
-                        eventType === "DELETE"
-                    ) {
-
-                        const deletedName =
-                            oldRow.name ||
-                            "المستند";
-
-                        await loadClientData();
-
-                        addClientNotification(
-                            "تم حذف مستند",
-                            `تم حذف ${deletedName}.`
-                        );
-                    }
                 }
             )
             .subscribe(
-                function(status) {
+                function (status) {
 
                     console.log(
-                        "DOCUMENTS REALTIME STATUS:",
+                        "DOCUMENT REALTIME:",
                         status
                     );
                 }
             );
 
 
-    /* REQUESTS */
+    /* ---------- REQUESTS ---------- */
+
     requestsRealtimeChannel =
         supabaseClient
             .channel(
-                `client_requests_${clientId}`
+                `client-requests-${clientId}-${suffix}`
             )
             .on(
                 "postgres_changes",
@@ -2883,187 +2740,256 @@ async function startClientRealtime() {
                     filter:
                         `client_id=eq.${clientId}`
                 },
-                async function(payload) {
+                async function () {
 
-                    console.log(
-                        "REQUEST REALTIME:",
-                        payload
-                    );
+                    await loadClientData();
 
-                    const eventType =
-                        payload?.eventType;
-
-                    const row =
-                        payload?.new || {};
-
-                    const oldRow =
-                        payload?.old || {};
-
-                    if (
-                        eventType === "INSERT"
-                    ) {
-
-                        await loadClientData();
-
-                        addClientNotification(
-                            "طلب مستند جديد",
-                            row.title ||
-                            "تمت إضافة طلب مستند جديد من فريق التدقيق."
-                        );
-
-                        return;
-                    }
-
-
-                    if (
-                        eventType === "UPDATE"
-                    ) {
-
-                        const oldStatus =
-                            oldRow.status || null;
-
-                        const newStatus =
-                            row.status || null;
-
-                        await loadClientData();
-
-                        if (
-                            oldStatus !==
-                            newStatus
-                        ) {
-
-                            addClientNotification(
-                                "تم تحديث طلب المستند",
-                                `${row.title || "طلب المستند"} • ${getClientRequestStatusText(newStatus)}`
-                            );
-
-                        } else {
-
-                            addClientNotification(
-                                "تم تحديث طلب المستند",
-                                row.title ||
-                                "تم تحديث أحد طلبات المستندات."
-                            );
-                        }
-
-                        return;
-                    }
-
-
-                    if (
-                        eventType === "DELETE"
-                    ) {
-
-                        await loadClientData();
-
-                        addClientNotification(
-                            "تم حذف طلب مستند",
-                            oldRow.title ||
-                            "تم حذف أحد طلبات المستندات."
-                        );
-                    }
                 }
             )
             .subscribe(
-                function(status) {
+                function (status) {
 
                     console.log(
-                        "REQUESTS REALTIME STATUS:",
+                        "REQUEST REALTIME:",
                         status
                     );
                 }
             );
 
 
-    /* MESSAGES */
+    /* ---------- MESSAGES ---------- */
+
     messagesRealtimeChannel =
         supabaseClient
             .channel(
-                `client_messages_${clientId}`
+                `client-messages-${clientId}-${suffix}`
             )
             .on(
                 "postgres_changes",
                 {
-                    event: "INSERT",
+                    event: "*",
                     schema: "public",
-                    table: "messages",
+                    table: "client_messages",
                     filter:
                         `client_id=eq.${clientId}`
                 },
-                async function(payload) {
+                async function (payload) {
 
                     console.log(
                         "MESSAGE REALTIME:",
                         payload
                     );
 
-                    const message =
-                        payload?.new;
+                    const row =
+                        payload?.new ||
+                        payload?.old;
 
-                    if (!message) {
+                    if (!row) {
                         return;
                     }
 
-                    const alreadyExists =
-                        clientMessages.some(
-                            item =>
-                                String(item.id) ===
-                                String(message.id)
-                        );
-
-                    if (!alreadyExists) {
-
-                        clientMessages.push(
-                            message
-                        );
-                    }
-
-                    clientMessages.sort(
-                        (a, b) =>
-                            new Date(a.created_at) -
-                            new Date(b.created_at)
-                    );
-
                     if (
-                        message.sender_role ===
-                        "auditor"
+                        payload.eventType ===
+                        "INSERT"
                     ) {
 
-                        const panel =
-                            document.getElementById(
-                                "messagePanel"
+                        const exists =
+                            clientMessages.some(
+                                function (message) {
+
+                                    return (
+                                        String(
+                                            message.id
+                                        ) ===
+                                        String(
+                                            row.id
+                                        )
+                                    );
+                                }
                             );
 
-                        const panelIsOpen =
-                            panel?.classList.contains(
-                                "show"
+                        if (!exists) {
+
+                            clientMessages.push(
+                                row
                             );
+                        }
 
-                        if (!panelIsOpen) {
+                        clientMessages.sort(
+                            function (a, b) {
 
-                            unreadMessagesCount++;
+                                return (
+                                    new Date(
+                                        a.created_at
+                                    ) -
+                                    new Date(
+                                        b.created_at
+                                    )
+                                );
+                            }
+                        );
 
-                            updateMessageBadge();
+                        if (
+                            row.sender ===
+                                "auditor" ||
+                            row.sender ===
+                                "admin"
+                        ) {
 
-                            addClientNotification(
-                                "رسالة جديدة",
-                                message.message
-                            );
+                            const panel =
+                                document.getElementById(
+                                    "messagePanel"
+                                );
 
-                        } else {
+                            const open =
+                                panel?.classList.contains(
+                                    "show"
+                                );
 
-                            await markClientMessagesRead();
+                            if (!open) {
+
+                                unreadMessagesCount++;
+
+                                updateMessageBadge();
+
+                                showToast(
+                                    "رسالة جديدة من فريق التدقيق"
+                                );
+                            }
                         }
                     }
 
+                    if (
+                        payload.eventType ===
+                        "UPDATE"
+                    ) {
+
+                        clientMessages =
+                            clientMessages.map(
+                                function (
+                                    message
+                                ) {
+
+                                    return (
+                                        String(
+                                            message.id
+                                        ) ===
+                                        String(
+                                            row.id
+                                        )
+                                    )
+                                        ? {
+                                            ...message,
+                                            ...row
+                                        }
+                                        : message;
+                                }
+                            );
+                    }
+
+                    if (
+                        payload.eventType ===
+                        "DELETE"
+                    ) {
+
+                        clientMessages =
+                            clientMessages.filter(
+                                function (
+                                    message
+                                ) {
+
+                                    return (
+                                        String(
+                                            message.id
+                                        ) !==
+                                        String(
+                                            row.id
+                                        )
+                                    );
+                                }
+                            );
+                    }
+
                     renderClientMessages();
+
+                    updateMessageBadge();
                 }
             )
             .subscribe(
-                function(status) {
+                function (status) {
 
                     console.log(
-                        "MESSAGES REALTIME STATUS:",
+                        "MESSAGE REALTIME:",
+                        status
+                    );
+                }
+            );
+
+
+    /* ---------- NOTIFICATIONS ---------- */
+
+    notificationsRealtimeChannel =
+        supabaseClient
+            .channel(
+                `client-notifications-${clientId}-${suffix}`
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "notifications",
+                    filter:
+                        `client_id=eq.${clientId}`
+                },
+                async function (payload) {
+
+                    const row =
+                        payload?.new ||
+                        payload?.old;
+
+                    if (!row) {
+                        return;
+                    }
+
+                    if (
+                        row.audience !==
+                        "client"
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        currentClient?.user_id &&
+                        String(
+                            row.user_id
+                        ) !==
+                        String(
+                            currentClient.user_id
+                        )
+                    ) {
+                        return;
+                    }
+
+                    await loadClientNotifications();
+
+                    if (
+                        payload.eventType ===
+                        "INSERT"
+                    ) {
+
+                        showToast(
+                            row.title ||
+                            "إشعار جديد"
+                        );
+                    }
+                }
+            )
+            .subscribe(
+                function (status) {
+
+                    console.log(
+                        "NOTIFICATION REALTIME:",
                         status
                     );
                 }
@@ -3071,329 +2997,655 @@ async function startClientRealtime() {
 }
 
 
-/* =========================================================
-   STOP REALTIME
-========================================================= */
-
 async function stopClientRealtime() {
 
-    try {
+    const channels = [
 
-        if (
-            documentsRealtimeChannel
-        ) {
+        documentsRealtimeChannel,
 
-            await supabaseClient.removeChannel(
-                documentsRealtimeChannel
-            );
+        requestsRealtimeChannel,
 
-            documentsRealtimeChannel = null;
+        messagesRealtimeChannel,
+
+        notificationsRealtimeChannel
+    ];
+
+    for (
+        const channel of channels
+    ) {
+
+        if (channel) {
+
+            try {
+
+                await supabaseClient
+                    .removeChannel(
+                        channel
+                    );
+
+            } catch (_) {}
         }
+    }
 
-        if (
-            requestsRealtimeChannel
-        ) {
+    documentsRealtimeChannel =
+        null;
 
-            await supabaseClient.removeChannel(
-                requestsRealtimeChannel
-            );
+    requestsRealtimeChannel =
+        null;
 
-            requestsRealtimeChannel = null;
-        }
+    messagesRealtimeChannel =
+        null;
 
-        if (
-            messagesRealtimeChannel
-        ) {
+    notificationsRealtimeChannel =
+        null;
+}
 
-            await supabaseClient.removeChannel(
-                messagesRealtimeChannel
-            );
 
-            messagesRealtimeChannel = null;
-        }
+/* =========================================================
+   DRAG & DROP
+========================================================= */
 
-    } catch (error) {
+function setupDragAndDrop() {
 
-        console.error(
-            "STOP REALTIME ERROR:",
-            error
+    const dropZone =
+        document.getElementById(
+            "dropZone"
         );
+
+    if (!dropZone) {
+        return;
     }
-}
 
+    [
+        "dragenter",
+        "dragover"
+    ]
+        .forEach(
+            function (eventName) {
 
-/* =========================================================
-   CURRENT USER
-========================================================= */
+                dropZone.addEventListener(
+                    eventName,
+                    function (event) {
 
-async function getCurrentUserId() {
+                        event.preventDefault();
 
-    try {
+                        if (
+                            selectedRequestId
+                        ) {
 
-        const {
-            data
-        } =
-            await supabaseClient.auth.getUser();
+                            dropZone.classList.add(
+                                "drop-active"
+                            );
+                        }
+                    }
+                );
+            }
+        );
 
-        return data?.user?.id || null;
+    [
+        "dragleave",
+        "drop"
+    ]
+        .forEach(
+            function (eventName) {
 
-    } catch (error) {
+                dropZone.addEventListener(
+                    eventName,
+                    function (event) {
 
-        return null;
-    }
-}
+                        event.preventDefault();
 
+                        dropZone.classList.remove(
+                            "drop-active"
+                        );
+                    }
+                );
+            }
+        );
 
-/* =========================================================
-   STATUS TEXT
-========================================================= */
+    dropZone.addEventListener(
+        "drop",
+        function (event) {
 
-function getClientDocumentStatusText(status) {
+            if (!selectedRequestId) {
 
-    const statuses = {
+                showToast(
+                    "اختر طلب المستند أولًا"
+                );
 
-        uploaded:
-            "تم تحميل الملف",
+                return;
+            }
 
-        review:
-            "قيد المراجعة",
+            selectedFiles.push(
+                ...Array.from(
+                    event
+                        .dataTransfer
+                        ?.files ||
+                    []
+                )
+            );
 
-        accepted:
-            "مقبول",
-
-        revision:
-            "يحتاج تعديل"
-    };
-
-    return (
-        statuses[status] ||
-        status ||
-        "غير محددة"
+            renderFileQueue();
+        }
     );
 }
 
 
-function getClientRequestStatusText(status) {
+function selectRequestForUpload(
+    id
+) {
 
-    const statuses = {
+    selectedRequestId =
+        id;
 
-        required:
-            "مطلوب",
+    selectedFiles =
+        [];
 
-        uploaded:
-            "تم تحميل الملف",
+    const request =
+        documentRequests.find(
+            function (item) {
 
-        review:
-            "قيد المراجعة",
+                return (
+                    String(item.id) ===
+                    String(id)
+                );
+            }
+        );
 
-        accepted:
-            "مقبول",
+    if (!request) {
 
-        revision:
-            "يحتاج تعديل",
+        showToast(
+            "تعذر العثور على طلب المستند"
+        );
 
-        additional:
-            "مطلوب مستند إضافي"
-    };
+        return;
+    }
 
-    return (
-        statuses[status] ||
-        status ||
-        "غير محددة"
-    );
+    document
+        .getElementById(
+            "selectedRequestBox"
+        )
+        ?.classList.remove(
+            "hidden"
+        );
+
+    const name =
+        document.getElementById(
+            "selectedRequestName"
+        );
+
+    if (name) {
+        name.textContent =
+            request.title;
+    }
+
+    const target =
+        document.getElementById(
+            "uploadTargetText"
+        );
+
+    if (target) {
+
+        target.textContent =
+            "قم بإرفاق الملف المطلوب وسيتم ربطه تلقائيًا بهذا الطلب.";
+    }
+
+    const drop =
+        document.getElementById(
+            "dropZone"
+        );
+
+    if (drop) {
+
+        drop.classList.remove(
+            "opacity-50",
+            "cursor-not-allowed"
+        );
+
+        drop.classList.add(
+            "cursor-pointer"
+        );
+
+        drop.onclick =
+            function () {
+
+                document
+                    .getElementById(
+                        "fileInput"
+                    )
+                    ?.click();
+            };
+    }
+
+    document
+        .getElementById(
+            "dropZoneTitle"
+        )
+        .textContent =
+        "اضغط هنا لاختيار المستند";
+
+    document
+        .getElementById(
+            "dropZoneDescription"
+        )
+        .textContent =
+        `سيتم ربط الملف بطلب: ${request.title}`;
+
+    renderFileQueue();
+
+    document
+        .getElementById(
+            "uploadSection"
+        )
+        ?.scrollIntoView({
+            behavior: "smooth"
+        });
 }
 
 
-/* =========================================================
-   SHOW PORTAL
-========================================================= */
+function cancelRequestUpload() {
 
-function showPortal() {
+    selectedRequestId =
+        null;
+
+    selectedFiles =
+        [];
+
+    const input =
+        document.getElementById(
+            "fileInput"
+        );
+
+    if (input) {
+        input.value = "";
+    }
 
     document
-        .getElementById("loginScreen")
-        ?.classList.add("hidden");
+        .getElementById(
+            "selectedRequestBox"
+        )
+        ?.classList.add(
+            "hidden"
+        );
 
     document
-        .getElementById("portalScreen")
-        ?.classList.remove("hidden");
+        .getElementById(
+            "fileQueue"
+        )
+        ?.classList.add(
+            "hidden"
+        );
 
-    updateClientInterface();
+    const drop =
+        document.getElementById(
+            "dropZone"
+        );
 
-    renderRequests();
-    updateStats();
-    renderDocuments();
-    renderNotifications();
-    renderClientMessages();
-    updateNotificationBadge();
-    updateMessageBadge();
+    if (drop) {
+
+        drop.classList.add(
+            "opacity-50",
+            "cursor-not-allowed"
+        );
+
+        drop.classList.remove(
+            "cursor-pointer"
+        );
+
+        drop.onclick =
+            null;
+    }
+
+    document
+        .getElementById(
+            "uploadTargetText"
+        )
+        .textContent =
+        "اختر طلب المستند الذي تريد رفع ملف له من قسم طلبات المستندات.";
+
+    document
+        .getElementById(
+            "dropZoneTitle"
+        )
+        .textContent =
+        "اختر طلب مستند أولًا";
+
+    document
+        .getElementById(
+            "dropZoneDescription"
+        )
+        .textContent =
+        "بعد اختيار الطلب، يمكنك الضغط هنا لاختيار الملف المطلوب.";
+}
+
+
+function handleFileSelect(
+    event
+) {
+
+    if (!selectedRequestId) {
+
+        showToast(
+            "يرجى اختيار طلب مستند أولًا"
+        );
+
+        event.target.value =
+            "";
+
+        return;
+    }
+
+    selectedFiles.push(
+        ...Array.from(
+            event.target.files || []
+        )
+    );
+
+    renderFileQueue();
+}
+
+
+function renderFileQueue() {
+
+    const queue =
+        document.getElementById(
+            "fileQueue"
+        );
+
+    const list =
+        document.getElementById(
+            "fileList"
+        );
+
+    const count =
+        document.getElementById(
+            "selectedFilesCount"
+        );
+
+    if (
+        !queue ||
+        !list ||
+        !count
+    ) {
+        return;
+    }
+
+    if (!selectedFiles.length) {
+
+        queue.classList.add(
+            "hidden"
+        );
+
+        return;
+    }
+
+    queue.classList.remove(
+        "hidden"
+    );
+
+    count.textContent =
+        `${selectedFiles.length} ملف`;
+
+    list.innerHTML =
+        selectedFiles
+            .map(
+                function (file, index) {
+
+                    return `
+
+                        <div class="flex items-center justify-between gap-3 glass-menu-item p-4 rounded-2xl border border-white/10">
+
+                            <div class="min-w-0">
+
+                                <p class="text-xs font-bold text-white truncate max-w-[220px]">
+                                    ${escapeHTML(
+                                        file.name
+                                    )}
+                                </p>
+
+                                <p class="text-[10px] text-cyan-200/60">
+                                    ${formatFileSize(
+                                        file.size
+                                    )}
+                                </p>
+
+                            </div>
+
+                            <button
+                                type="button"
+                                onclick="removeFile(${index})"
+                                class="text-cyan-200/60 hover:text-red-400 p-2 rounded-xl"
+                            >
+                                <i
+                                    data-lucide="trash-2"
+                                    class="w-4 h-4"
+                                ></i>
+                            </button>
+
+                        </div>
+                    `;
+                }
+            )
+            .join("");
 
     lucide.createIcons();
 }
 
 
-/* =========================================================
-   CLIENT INTERFACE
-========================================================= */
+function removeFile(
+    index
+) {
 
-function updateClientInterface() {
+    selectedFiles.splice(
+        index,
+        1
+    );
 
-    if (!currentClient) {
-        return;
-    }
-
-    const clientName =
-        currentClient.name ||
-        currentClient.company_name ||
-        "شركة العميل";
-
-    const welcome =
-        document.getElementById(
-            "welcomeClientName"
-        );
-
-    if (welcome) {
-        welcome.textContent =
-            " " + clientName;
-    }
-
-    const headerName =
-        document.getElementById(
-            "clientHeaderName"
-        );
-
-    if (headerName) {
-        headerName.textContent =
-            clientName;
-    }
-
-    const avatar =
-        document.getElementById(
-            "clientAvatar"
-        );
-
-    if (avatar) {
-
-        avatar.textContent =
-            clientName
-                .trim()
-                .charAt(0)
-                .toUpperCase();
-    }
-
-    const year =
-        currentClient.year ||
-        currentClient.fiscal_year ||
-        "2026";
-
-    const headerYear =
-        document.getElementById(
-            "clientHeaderYear"
-        );
-
-    if (headerYear) {
-
-        headerYear.textContent =
-            `الملف المالي ${year}`;
-    }
+    renderFileQueue();
 }
 
 
 /* =========================================================
-   LOGOUT
+   UPLOAD FILES
 ========================================================= */
 
-async function handleLogout() {
+async function uploadFiles() {
+
+    if (
+        !selectedRequestId ||
+        !selectedFiles.length
+    ) {
+
+        showToast(
+            "اختاري طلب المستند وملفًا واحدًا على الأقل"
+        );
+
+        return;
+    }
+
+    if (!currentClient?.id) {
+
+        showToast(
+            "لم يتم التعرف على حساب العميل"
+        );
+
+        return;
+    }
+
+    const request =
+        documentRequests.find(
+            function (item) {
+
+                return (
+                    String(item.id) ===
+                    String(selectedRequestId)
+                );
+            }
+        );
+
+    if (!request) {
+        return;
+    }
+
+    const paths = [];
 
     try {
 
         setLoading(
             true,
-            "جارٍ تسجيل الخروج..."
+            "جارٍ رفع المستند..."
         );
 
-        await stopClientRealtime();
-
         const {
-            error
+            data: authData,
+            error: authError
         } =
-            await supabaseClient.auth.signOut();
+            await supabaseClient.auth.getUser();
 
-        if (error) {
-
-            console.error(
-                "LOGOUT ERROR:",
-                error
-            );
-
-            showToast(
-                error.message ||
-                "تعذر تسجيل الخروج"
-            );
-
-            return;
+        if (authError) {
+            throw authError;
         }
 
-        currentClient = null;
-        window.currentClient = null;
+        const user =
+            authData?.user;
 
-        documents = [];
-        documentRequests = [];
-        selectedFiles = [];
-        selectedRequestId = null;
+        if (!user) {
 
-        clientMessages = [];
-        unreadMessagesCount = 0;
-
-        notificationStorageKey = "";
-        clientNotifications = [];
-
-        const messagePanel =
-            document.getElementById(
-                "messagePanel"
-            );
-
-        if (messagePanel) {
-            messagePanel.classList.remove(
-                "show"
+            throw new Error(
+                "انتهت جلسة تسجيل الدخول"
             );
         }
 
-        document
-            .getElementById("portalScreen")
-            ?.classList.add("hidden");
+        for (
+            const file of selectedFiles
+        ) {
 
-        document
-            .getElementById("loginScreen")
-            ?.classList.remove("hidden");
+            const safeName =
+                file.name.replace(
+                    /[^\p{L}\p{N}._-]/gu,
+                    "_"
+                );
 
-        const password =
-            document.getElementById(
-                "loginPassword"
+            const filePath =
+                `${currentClient.id}/${request.id}/${Date.now()}_${crypto.randomUUID().slice(0,8)}_${safeName}`;
+
+            const {
+                error: uploadError
+            } =
+                await supabaseClient.storage
+                    .from(
+                        "client-documents"
+                    )
+                    .upload(
+                        filePath,
+                        file,
+                        {
+                            upsert: false,
+                            contentType:
+                                file.type ||
+                                "application/octet-stream"
+                        }
+                    );
+
+            if (uploadError) {
+                throw uploadError;
+            }
+
+            paths.push(
+                filePath
             );
 
-        if (password) {
-            password.value = "";
+            const {
+                error: documentError
+            } =
+                await supabaseClient
+                    .from("documents")
+                    .insert({
+
+                        request_id:
+                            request.id,
+
+                        client_id:
+                            currentClient.id,
+
+                        name:
+                            file.name,
+
+                        file_path:
+                            filePath,
+
+                        file_size:
+                            file.size,
+
+                        status:
+                            "uploaded",
+
+                        uploaded_by:
+                            user.id,
+
+                        mime_type:
+                            file.type ||
+                            null
+                    });
+
+            if (documentError) {
+                throw documentError;
+            }
         }
 
-        closeModal();
+        await supabaseClient
+            .from("document_requests")
+            .update({
+                status: "uploaded"
+            })
+            .eq(
+                "id",
+                request.id
+            )
+            .eq(
+                "client_id",
+                currentClient.id
+            );
 
-        updateMessageBadge();
+        selectedFiles =
+            [];
+
+        cancelRequestUpload();
+
+        await loadClientData();
 
         showToast(
-            "تم تسجيل الخروج بنجاح"
+            "تم رفع المستند بنجاح"
         );
 
     } catch (error) {
 
+        for (
+            const path of paths
+        ) {
+
+            try {
+
+                await supabaseClient
+                    .storage
+                    .from(
+                        "client-documents"
+                    )
+                    .remove(
+                        [path]
+                    );
+
+            } catch (_) {}
+        }
+
         console.error(
-            "LOGOUT ERROR:",
+            "UPLOAD ERROR:",
             error
         );
 
         showToast(
-            error?.message ||
-            "حدث خطأ أثناء تسجيل الخروج"
+            error.message ||
+            "حدث خطأ أثناء رفع المستند"
         );
 
     } finally {
@@ -3404,7 +3656,7 @@ async function handleLogout() {
 
 
 /* =========================================================
-   REQUESTS RENDER
+   REQUESTS
 ========================================================= */
 
 function renderRequests() {
@@ -3420,30 +3672,31 @@ function renderRequests() {
 
     const completed =
         documentRequests.filter(
-            request =>
-                request.status === "review" ||
-                request.status === "accepted" ||
-                request.status === "uploaded"
+            function (request) {
+
+                return [
+                    "review",
+                    "accepted",
+                    "uploaded"
+                ].includes(
+                    request.status
+                );
+            }
         ).length;
 
-    const progressElement =
-        document.getElementById(
+    document
+        .getElementById(
             "requestsProgress"
+        )
+        ?.replaceChildren(
+            document.createTextNode(
+                `${completed} من ${documentRequests.length} مكتملة`
+            )
         );
 
-    if (progressElement) {
-
-        progressElement.textContent =
-            `${completed} من ${documentRequests.length} مكتملة`;
-    }
-
-    if (
-        documentRequests.length ===
-        0
-    ) {
+    if (!documentRequests.length) {
 
         container.innerHTML = `
-
             <div class="lg:col-span-2 text-center py-14 text-cyan-200/60 rounded-3xl border border-dashed border-white/10 bg-black/20">
 
                 <div class="w-16 h-16 mx-auto mb-4 rounded-3xl bg-cyan-500/10 flex items-center justify-center">
@@ -3476,73 +3729,66 @@ function renderRequests() {
     container.innerHTML =
         documentRequests
             .map(
-                request => {
+                function (request) {
 
                     const status =
                         getRequestStatus(
                             request.status
                         );
 
-                    let actionButton = "";
+                    let action =
+                        "";
 
                     if (
-                        request.status === "required" ||
-                        request.status === "revision" ||
-                        request.status === "additional"
+                        [
+                            "required",
+                            "revision",
+                            "additional"
+                        ].includes(
+                            request.status
+                        )
                     ) {
 
-                        actionButton = `
-
+                        action = `
                             <button
                                 type="button"
                                 onclick="selectRequestForUpload('${escapeAttribute(request.id)}')"
-                                class="aqua-glow-btn px-4 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2"
+                                class="aqua-glow-btn px-4 py-2.5 rounded-xl text-xs font-bold text-white"
                             >
-
-                                <i
-                                    data-lucide="upload"
-                                    class="w-4 h-4"
-                                ></i>
-
-                                <span>
-                                    ${
-                                        request.status === "revision"
-                                            ? "رفع نسخة جديدة"
-                                            : "رفع المستند"
-                                    }
-                                </span>
-
+                                ${
+                                    request.status ===
+                                    "revision"
+                                        ? "رفع نسخة جديدة"
+                                        : "رفع المستند"
+                                }
                             </button>
                         `;
 
                     } else if (
-                        request.status === "review"
+                        request.status ===
+                        "review"
                     ) {
 
-                        actionButton = `
-
+                        action = `
                             <span class="text-[10px] text-amber-200/70">
                                 بانتظار نتيجة المراجعة
                             </span>
                         `;
 
                     } else if (
-                        request.status === "uploaded"
+                        request.status ===
+                        "uploaded"
                     ) {
 
-                        actionButton = `
-
+                        action = `
                             <span class="text-[10px] text-yellow-200/70 font-semibold">
                                 تم الرفع بنجاح
                             </span>
                         `;
 
-                    } else if (
-                        request.status === "accepted"
-                    ) {
+                    } else {
 
-                        actionButton = `
-
+                        action = `
                             <span class="text-[10px] text-emerald-200/70">
                                 لا يوجد إجراء مطلوب منك
                             </span>
@@ -3550,7 +3796,6 @@ function renderRequests() {
                     }
 
                     return `
-
                         <div class="glass-menu-item rounded-3xl p-5 relative overflow-hidden">
 
                             <div class="absolute top-0 right-0 w-1 h-full ${status.line}"></div>
@@ -3571,11 +3816,16 @@ function renderRequests() {
                                     <div>
 
                                         <h3 class="text-sm font-black text-white mb-1">
-                                            ${escapeHTML(request.title)}
+                                            ${escapeHTML(
+                                                request.title
+                                            )}
                                         </h3>
 
                                         <p class="text-[11px] text-cyan-200/60 leading-relaxed">
-                                            ${escapeHTML(request.description || "")}
+                                            ${escapeHTML(
+                                                request.description ||
+                                                ""
+                                            )}
                                         </p>
 
                                     </div>
@@ -3591,21 +3841,13 @@ function renderRequests() {
                             ${
                                 request.note
                                     ? `
-
                                         <div class="mb-4 bg-black/20 border border-white/5 rounded-xl p-3">
 
-                                            <div class="flex gap-2 items-start">
-
-                                                <i
-                                                    data-lucide="message-square"
-                                                    class="w-4 h-4 text-cyan-300 shrink-0 mt-0.5"
-                                                ></i>
-
-                                                <p class="text-[10px] text-cyan-200/70 leading-relaxed">
-                                                    ${escapeHTML(request.note)}
-                                                </p>
-
-                                            </div>
+                                            <p class="text-[10px] text-cyan-200/70 leading-relaxed">
+                                                ${escapeHTML(
+                                                    request.note
+                                                )}
+                                            </p>
 
                                         </div>
                                     `
@@ -3618,7 +3860,7 @@ function renderRequests() {
                                     طلب فريق التدقيق
                                 </span>
 
-                                ${actionButton}
+                                ${action}
 
                             </div>
 
@@ -3629,15 +3871,14 @@ function renderRequests() {
             .join("");
 
     lucide.createIcons();
+
     updateProgress();
 }
 
 
-/* =========================================================
-   REQUEST STATUS
-========================================================= */
-
-function getRequestStatus(status) {
+function getRequestStatus(
+    status
+) {
 
     const statuses = {
 
@@ -3716,946 +3957,12 @@ function getRequestStatus(status) {
 
 
 /* =========================================================
-   SELECT REQUEST
+   DOCUMENTS
 ========================================================= */
 
-function selectRequestForUpload(id) {
-
-    selectedRequestId = id;
-    selectedFiles = [];
-
-    const request =
-        documentRequests.find(
-            item =>
-                String(item.id) ===
-                String(id)
-        );
-
-    if (!request) {
-
-        showToast(
-            "تعذر العثور على طلب المستند"
-        );
-
-        return;
-    }
-
-    document
-        .getElementById("selectedRequestBox")
-        ?.classList.remove("hidden");
-
-    const selectedName =
-        document.getElementById(
-            "selectedRequestName"
-        );
-
-    if (selectedName) {
-
-        selectedName.textContent =
-            request.title;
-    }
-
-    const uploadTarget =
-        document.getElementById(
-            "uploadTargetText"
-        );
-
-    if (uploadTarget) {
-
-        uploadTarget.textContent =
-            "قم بإرفاق الملف المطلوب وسيتم ربطه تلقائيًا بهذا الطلب.";
-    }
-
-    const dropZone =
-        document.getElementById(
-            "dropZone"
-        );
-
-    if (dropZone) {
-
-        dropZone.classList.remove(
-            "opacity-50",
-            "cursor-not-allowed"
-        );
-
-        dropZone.classList.add(
-            "cursor-pointer"
-        );
-
-        dropZone.onclick =
-            function () {
-
-                document
-                    .getElementById(
-                        "fileInput"
-                    )
-                    ?.click();
-            };
-    }
-
-    document
-        .getElementById(
-            "dropZoneTitle"
-        )
-        .textContent =
-        "اضغط هنا لاختيار المستند";
-
-    document
-        .getElementById(
-            "dropZoneDescription"
-        )
-        .textContent =
-        `سيتم ربط الملف بطلب: ${request.title}`;
-
-    renderFileQueue();
-
-    document
-        .getElementById(
-            "uploadSection"
-        )
-        ?.scrollIntoView({
-            behavior: "smooth",
-            block: "start"
-        });
-
-    showToast(
-        `تم اختيار طلب: ${request.title}`
-    );
-}
-
-
-/* =========================================================
-   CANCEL REQUEST
-========================================================= */
-
-function cancelRequestUpload() {
-
-    selectedRequestId = null;
-    selectedFiles = [];
-
-    const fileInput =
-        document.getElementById(
-            "fileInput"
-        );
-
-    if (fileInput) {
-        fileInput.value = "";
-    }
-
-    document
-        .getElementById(
-            "selectedRequestBox"
-        )
-        ?.classList.add(
-            "hidden"
-        );
-
-    document
-        .getElementById(
-            "fileQueue"
-        )
-        ?.classList.add(
-            "hidden"
-        );
-
-    const dropZone =
-        document.getElementById(
-            "dropZone"
-        );
-
-    if (dropZone) {
-
-        dropZone.classList.add(
-            "opacity-50",
-            "cursor-not-allowed"
-        );
-
-        dropZone.classList.remove(
-            "cursor-pointer"
-        );
-
-        dropZone.onclick = null;
-    }
-
-    const uploadTarget =
-        document.getElementById(
-            "uploadTargetText"
-        );
-
-    if (uploadTarget) {
-
-        uploadTarget.textContent =
-            "اختر طلب المستند الذي تريد رفع ملف له من قسم طلبات المستندات.";
-    }
-
-    const title =
-        document.getElementById(
-            "dropZoneTitle"
-        );
-
-    if (title) {
-        title.textContent =
-            "اختر طلب مستند أولًا";
-    }
-
-    const description =
-        document.getElementById(
-            "dropZoneDescription"
-        );
-
-    if (description) {
-
-        description.textContent =
-            "بعد اختيار الطلب، يمكنك الضغط هنا لاختيار الملف المطلوب.";
-    }
-}
-
-
-/* =========================================================
-   FILE SELECT
-========================================================= */
-
-function handleFileSelect(event) {
-
-    if (!selectedRequestId) {
-
-        showToast(
-            "يرجى اختيار طلب مستند أولًا"
-        );
-
-        event.target.value = "";
-
-        return;
-    }
-
-    const files =
-        Array.from(
-            event.target.files || []
-        );
-
-    if (files.length > 0) {
-
-        selectedFiles = [
-            ...selectedFiles,
-            ...files
-        ];
-
-        renderFileQueue();
-    }
-}
-
-
-/* =========================================================
-   FILE QUEUE
-========================================================= */
-
-function renderFileQueue() {
-
-    const queue =
-        document.getElementById(
-            "fileQueue"
-        );
-
-    const fileList =
-        document.getElementById(
-            "fileList"
-        );
-
-    const count =
-        document.getElementById(
-            "selectedFilesCount"
-        );
-
-    if (
-        !queue ||
-        !fileList ||
-        !count
-    ) {
-        return;
-    }
-
-    if (
-        selectedFiles.length ===
-        0
-    ) {
-
-        queue.classList.add(
-            "hidden"
-        );
-
-        return;
-    }
-
-    queue.classList.remove(
-        "hidden"
-    );
-
-    count.textContent =
-        `${selectedFiles.length} ملف`;
-
-    fileList.innerHTML =
-        selectedFiles
-            .map(
-                (file, index) => `
-
-                    <div class="flex items-center justify-between gap-3 glass-menu-item p-4 rounded-2xl border border-white/10">
-
-                        <div class="flex items-center gap-3 min-w-0">
-
-                            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center shrink-0">
-
-                                <i
-                                    data-lucide="file"
-                                    class="w-5 h-5"
-                                ></i>
-
-                            </div>
-
-                            <div class="min-w-0">
-
-                                <p class="text-xs font-bold text-white truncate max-w-[220px]">
-                                    ${escapeHTML(file.name)}
-                                </p>
-
-                                <p class="text-[10px] text-cyan-200/60">
-                                    ${formatFileSize(file.size)}
-                                </p>
-
-                            </div>
-
-                        </div>
-
-                        <button
-                            type="button"
-                            onclick="removeFile(${index})"
-                            class="text-cyan-200/60 hover:text-red-400 hover:bg-white/10 p-2 rounded-xl transition"
-                        >
-
-                            <i
-                                data-lucide="trash-2"
-                                class="w-4 h-4"
-                            ></i>
-
-                        </button>
-
-                    </div>
-                `
-            )
-            .join("");
-
-    lucide.createIcons();
-}
-
-
-/* =========================================================
-   REMOVE FILE
-========================================================= */
-
-function removeFile(index) {
-
-    selectedFiles.splice(
-        index,
-        1
-    );
-
-    renderFileQueue();
-}
-
-
-/* =========================================================
-   DRAG & DROP
-========================================================= */
-
-function setupDragAndDrop() {
-
-    const dropZone =
-        document.getElementById(
-            "dropZone"
-        );
-
-    if (!dropZone) {
-        return;
-    }
-
-    [
-        "dragenter",
-        "dragover"
-    ].forEach(
-        eventName => {
-
-            dropZone.addEventListener(
-                eventName,
-                function (event) {
-
-                    event.preventDefault();
-
-                    if (selectedRequestId) {
-
-                        dropZone.classList.add(
-                            "drop-active"
-                        );
-                    }
-                }
-            );
-        }
-    );
-
-    [
-        "dragleave",
-        "drop"
-    ].forEach(
-        eventName => {
-
-            dropZone.addEventListener(
-                eventName,
-                function (event) {
-
-                    event.preventDefault();
-
-                    dropZone.classList.remove(
-                        "drop-active"
-                    );
-                }
-            );
-        }
-    );
-
-    dropZone.addEventListener(
-        "drop",
-        function (event) {
-
-            if (!selectedRequestId) {
-
-                showToast(
-                    "اختر طلب المستند أولًا"
-                );
-
-                return;
-            }
-
-            const droppedFiles =
-                Array.from(
-                    event.dataTransfer?.files || []
-                );
-
-            selectedFiles = [
-                ...selectedFiles,
-                ...droppedFiles
-            ];
-
-            renderFileQueue();
-        }
-    );
-}
-
-
-/* =========================================================
-   UPLOAD
-========================================================= */
-
-async function uploadFiles() {
-
-    if (!selectedRequestId) {
-
-        showToast(
-            "يرجى اختيار طلب المستند أولًا"
-        );
-
-        return;
-    }
-
-    if (
-        selectedFiles.length ===
-        0
-    ) {
-
-        showToast(
-            "يرجى اختيار ملف واحد على الأقل"
-        );
-
-        return;
-    }
-
-    if (
-        !currentClient ||
-        !currentClient.id
-    ) {
-
-        showToast(
-            "لم يتم التعرف على حساب العميل"
-        );
-
-        return;
-    }
-
-    const request =
-        documentRequests.find(
-            item =>
-                String(item.id) ===
-                String(selectedRequestId)
-        );
-
-    if (!request) {
-
-        showToast(
-            "تعذر العثور على طلب المستند"
-        );
-
-        return;
-    }
-
-    const uploadButton =
-        document.getElementById(
-            "uploadButton"
-        );
-
-    let uploadedPaths = [];
-
-    try {
-
-        if (uploadButton) {
-
-            uploadButton.disabled = true;
-            uploadButton.style.opacity = "0.7";
-
-            const span =
-                uploadButton.querySelector(
-                    "span"
-                );
-
-            if (span) {
-
-                span.textContent =
-                    "جارٍ رفع الملف...";
-            }
-        }
-
-        setLoading(
-            true,
-            "جارٍ رفع المستند..."
-        );
-
-        const {
-            data: userData,
-            error: userError
-        } =
-            await supabaseClient.auth.getUser();
-
-        if (userError) {
-            throw new Error(
-                userError.message
-            );
-        }
-
-        const authUser =
-            userData?.user;
-
-        if (!authUser) {
-
-            throw new Error(
-                "انتهت جلسة تسجيل الدخول. سجلي الدخول مرة أخرى."
-            );
-        }
-
-        let uploadedCount = 0;
-
-        for (
-            const file of selectedFiles
-        ) {
-
-            const safeFileName =
-                file.name.replace(
-                    /[^\p{L}\p{N}._-]/gu,
-                    "_"
-                );
-
-            const uniqueName =
-                `${Date.now()}_${Math.random().toString(36).slice(2,8)}_${safeFileName}`;
-
-            const filePath =
-                `${currentClient.id}/${request.id}/${uniqueName}`;
-
-            const {
-                error: uploadError
-            } =
-                await supabaseClient
-                    .storage
-                    .from("client-documents")
-                    .upload(
-                        filePath,
-                        file,
-                        {
-                            upsert: false,
-                            contentType:
-                                file.type ||
-                                "application/octet-stream"
-                        }
-                    );
-
-            if (uploadError) {
-
-                throw new Error(
-                    uploadError.message ||
-                    `فشل رفع الملف: ${file.name}`
-                );
-            }
-
-            uploadedPaths.push(
-                filePath
-            );
-
-            const {
-                data: savedDocument,
-                error: dbError
-            } =
-                await supabaseClient
-                    .from("documents")
-                    .insert({
-                        request_id:
-                            request.id,
-
-                        client_id:
-                            currentClient.id,
-
-                        name:
-                            file.name,
-
-                        file_path:
-                            filePath,
-
-                        file_size:
-                            file.size,
-
-                        status:
-                            "uploaded",
-
-                        upload_date:
-                            new Date().toISOString(),
-
-                        auditor_notes:
-                            "تم استلام المستند بنجاح.",
-
-                        uploaded_by:
-                            authUser.id,
-
-                        mime_type:
-                            file.type ||
-                            null
-                    })
-                    .select()
-                    .single();
-
-            if (dbError) {
-
-                await supabaseClient
-                    .storage
-                    .from("client-documents")
-                    .remove([
-                        filePath
-                    ]);
-
-                throw new Error(
-                    dbError.message ||
-                    `فشل تسجيل الملف: ${file.name}`
-                );
-            }
-
-            documents.unshift({
-
-                id:
-                    savedDocument.id,
-
-                name:
-                    savedDocument.name,
-
-                uploadDate:
-                    formatSupabaseDate(
-                        savedDocument.upload_date
-                    ),
-
-                status:
-                    savedDocument.status ||
-                    "uploaded",
-
-                requestId:
-                    savedDocument.request_id,
-
-                requestName:
-                    request.title,
-
-                auditorNotes:
-                    savedDocument.auditor_notes ||
-                    "تم استلام المستند بنجاح.",
-
-                fileSize:
-                    formatFileSize(
-                        savedDocument.file_size
-                    ),
-
-                filePath:
-                    savedDocument.file_path ||
-                    "",
-
-                uploadedBy:
-                    savedDocument.uploaded_by ||
-                    authUser.id,
-
-                mimeType:
-                    savedDocument.mime_type ||
-                    ""
-            });
-
-            uploadedCount++;
-        }
-
-        const {
-            data: updatedRequest,
-            error: requestUpdateError
-        } =
-            await supabaseClient
-                .from("document_requests")
-                .update({
-                    status: "uploaded"
-                })
-                .eq(
-                    "id",
-                    request.id
-                )
-                .eq(
-                    "client_id",
-                    currentClient.id
-                )
-                .select()
-                .maybeSingle();
-
-        if (requestUpdateError) {
-
-            console.error(
-                "REQUEST UPDATE ERROR:",
-                requestUpdateError
-            );
-
-        } else if (updatedRequest) {
-
-            request.status =
-                updatedRequest.status;
-        }
-
-        selectedFiles = [];
-
-        const fileInput =
-            document.getElementById(
-                "fileInput"
-            );
-
-        if (fileInput) {
-            fileInput.value = "";
-        }
-
-        renderFileQueue();
-        renderRequests();
-        updateStats();
-        renderDocuments();
-
-        addClientNotification(
-            "تم رفع المستند",
-            `تم رفع ${uploadedCount} مستند بنجاح.`
-        );
-
-        cancelRequestUpload();
-
-    } catch (error) {
-
-        console.error(
-            "UPLOAD ERROR:",
-            error
-        );
-
-        if (
-            uploadedPaths.length >
-            0
-        ) {
-
-            try {
-
-                await supabaseClient
-                    .storage
-                    .from("client-documents")
-                    .remove(
-                        uploadedPaths
-                    );
-
-            } catch (cleanupError) {
-
-                console.error(
-                    "CLEANUP ERROR:",
-                    cleanupError
-                );
-            }
-        }
-
-        showToast(
-            error?.message ||
-            "حدث خطأ أثناء رفع المستند"
-        );
-
-    } finally {
-
-        setLoading(false);
-
-        if (uploadButton) {
-
-            uploadButton.disabled = false;
-            uploadButton.style.opacity = "1";
-
-            const span =
-                uploadButton.querySelector(
-                    "span"
-                );
-
-            if (span) {
-
-                span.textContent =
-                    "تأكيد رفع المستند";
-            }
-        }
-    }
-}
-
-
-/* =========================================================
-   STATS
-========================================================= */
-
-function updateStats() {
-
-    const acceptedCount =
-        documents.filter(
-            doc =>
-                doc.status ===
-                "accepted"
-        ).length;
-
-    const reviewCount =
-        documents.filter(
-            doc =>
-                doc.status === "review" ||
-                doc.status === "uploaded"
-        ).length;
-
-    const requiredCount =
-        documentRequests.filter(
-            request =>
-                request.status === "required" ||
-                request.status === "revision" ||
-                request.status === "additional"
-        ).length;
-
-    const acceptedElement =
-        document.getElementById(
-            "statAcceptedCount"
-        );
-
-    const reviewElement =
-        document.getElementById(
-            "statReviewCount"
-        );
-
-    const requiredElement =
-        document.getElementById(
-            "statRequiredCount"
-        );
-
-    if (acceptedElement) {
-        acceptedElement.textContent =
-            formatNumber(
-                acceptedCount
-            );
-    }
-
-    if (reviewElement) {
-        reviewElement.textContent =
-            formatNumber(
-                reviewCount
-            );
-    }
-
-    if (requiredElement) {
-        requiredElement.textContent =
-            formatNumber(
-                requiredCount
-            );
-    }
-
-    updateProgress();
-}
-
-
-/* =========================================================
-   PROGRESS
-========================================================= */
-
-function updateProgress() {
-
-    const total =
-        documentRequests.length;
-
-    const completed =
-        documentRequests.filter(
-            request =>
-                request.status === "review" ||
-                request.status === "accepted" ||
-                request.status === "uploaded"
-        ).length;
-
-    const percent =
-        total === 0
-            ? 0
-            : Math.round(
-                (
-                    completed /
-                    total
-                ) *
-                100
-            );
-
-    const percentElement =
-        document.getElementById(
-            "progressPercent"
-        );
-
-    const textElement =
-        document.getElementById(
-            "progressText"
-        );
-
-    const barElement =
-        document.getElementById(
-            "progressBar"
-        );
-
-    if (percentElement) {
-        percentElement.textContent =
-            `${percent}%`;
-    }
-
-    if (textElement) {
-        textElement.textContent =
-            `${completed} من ${total}`;
-    }
-
-    if (barElement) {
-        barElement.style.width =
-            `${percent}%`;
-    }
-}
-
-
-/* =========================================================
-   FILTER
-========================================================= */
-
-function filterDocuments(filter) {
+function filterDocuments(
+    filter
+) {
 
     currentFilter =
         filter;
@@ -4665,7 +3972,7 @@ function filterDocuments(filter) {
             ".filter-btn"
         )
         .forEach(
-            button => {
+            function (button) {
 
                 button.classList.remove(
                     "bg-cyan-500",
@@ -4678,30 +3985,18 @@ function filterDocuments(filter) {
             }
         );
 
-    const activeButton =
-        document.getElementById(
+    document
+        .getElementById(
             `filter-${filter}`
-        );
-
-    if (activeButton) {
-
-        activeButton.classList.add(
+        )
+        ?.classList.add(
             "bg-cyan-500",
             "text-slate-950"
         );
 
-        activeButton.classList.remove(
-            "text-cyan-200/70"
-        );
-    }
-
     renderDocuments();
 }
 
-
-/* =========================================================
-   DOCUMENTS
-========================================================= */
 
 function renderDocuments() {
 
@@ -4714,18 +4009,20 @@ function renderDocuments() {
         return;
     }
 
-    const filteredDocuments =
+    const list =
         documents.filter(
-            doc => {
+            function (doc) {
 
                 if (
                     currentFilter ===
                     "review"
                 ) {
 
-                    return (
-                        doc.status === "review" ||
-                        doc.status === "uploaded"
+                    return [
+                        "review",
+                        "uploaded"
+                    ].includes(
+                        doc.status
                     );
                 }
 
@@ -4755,44 +4052,29 @@ function renderDocuments() {
             }
         );
 
-    if (
-        filteredDocuments.length ===
-        0
-    ) {
+    if (!list.length) {
 
         container.innerHTML = `
-
             <div class="text-center py-16 text-cyan-200/60 rounded-3xl border border-dashed border-white/10 bg-black/20">
-
-                <div class="w-16 h-16 mx-auto mb-4 rounded-3xl bg-cyan-500/10 flex items-center justify-center">
-
-                    <i
-                        data-lucide="file-up"
-                        class="w-8 h-8 text-cyan-400/50"
-                    ></i>
-
-                </div>
 
                 <h4 class="text-base font-bold text-white mb-2">
                     لا توجد مستندات في هذه القائمة
                 </h4>
 
                 <p class="text-xs text-cyan-200/50">
-                    يمكنك البدء برفع المستندات المطلوبة من قسم طلبات المستندات.
+                    يمكنك البدء برفع المستندات المطلوبة.
                 </p>
 
             </div>
         `;
 
-        lucide.createIcons();
-
         return;
     }
 
     container.innerHTML =
-        filteredDocuments
+        list
             .map(
-                doc => {
+                function (doc) {
 
                     const status =
                         getDocumentStatus(
@@ -4800,83 +4082,58 @@ function renderDocuments() {
                         );
 
                     return `
-
                         <div class="glass-menu-item rounded-2xl p-4 sm:p-5 transition">
 
                             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5">
 
-                                <div class="flex items-center gap-4 min-w-0">
+                                <div class="min-w-0">
 
-                                    <div class="w-12 h-12 rounded-2xl ${status.iconBg} ${status.iconColor} border ${status.iconBorder} flex items-center justify-center shrink-0">
+                                    <h4 class="font-black text-sm text-white mb-1 truncate">
+                                        ${escapeHTML(
+                                            doc.name
+                                        )}
+                                    </h4>
 
-                                        <i
-                                            data-lucide="${status.icon}"
-                                            class="w-6 h-6"
-                                        ></i>
+                                    <p class="text-[10px] text-cyan-200/50 mb-1">
+                                        مرتبط بطلب:
+                                        ${escapeHTML(
+                                            doc.requestName
+                                        )}
+                                    </p>
 
-                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 text-[10px] text-cyan-200/60">
 
-                                    <div class="min-w-0">
+                                        <span>
+                                            ${escapeHTML(
+                                                doc.uploadDate
+                                            )}
+                                        </span>
 
-                                        <h4 class="font-black text-sm text-white mb-1 truncate">
-                                            ${escapeHTML(doc.name)}
-                                        </h4>
+                                        <span>•</span>
 
-                                        <p class="text-[10px] text-cyan-200/50 mb-1">
-                                            مرتبط بطلب: ${escapeHTML(doc.requestName)}
-                                        </p>
-
-                                        <div class="flex flex-wrap items-center gap-2 text-[10px] text-cyan-200/60">
-
-                                            <span>
-                                                ${escapeHTML(doc.uploadDate)}
-                                            </span>
-
-                                            <span>•</span>
-
-                                            <span>
-                                                ${escapeHTML(doc.fileSize)}
-                                            </span>
-
-                                        </div>
+                                        <span>
+                                            ${escapeHTML(
+                                                doc.fileSize
+                                            )}
+                                        </span>
 
                                     </div>
 
                                 </div>
 
-                                <div class="flex items-center justify-between w-full sm:w-auto gap-3 pt-3 sm:pt-0 border-t sm:border-0 border-white/10">
+                                <div class="flex items-center gap-2">
 
                                     <span class="${status.badge}">
-
-                                        <i
-                                            data-lucide="${status.smallIcon}"
-                                            class="w-3.5 h-3.5"
-                                        ></i>
-
                                         ${status.label}
-
                                     </span>
 
-                                    <div class="flex items-center gap-2">
-
-                                        <button
-                                            type="button"
-                                            onclick="viewDocDetails('${escapeAttribute(doc.id)}')"
-                                            class="bg-white/10 hover:bg-cyan-500 text-white hover:text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition flex items-center gap-1.5 border border-white/10"
-                                        >
-
-                                            <i
-                                                data-lucide="eye"
-                                                class="w-4 h-4"
-                                            ></i>
-
-                                            <span>
-                                                التفاصيل
-                                            </span>
-
-                                        </button>
-
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onclick="viewDocDetails('${escapeAttribute(doc.id)}')"
+                                        class="bg-white/10 hover:bg-cyan-500 text-white hover:text-slate-950 font-bold px-4 py-2 rounded-xl text-xs border border-white/10"
+                                    >
+                                        التفاصيل
+                                    </button>
 
                                 </div>
 
@@ -4892,108 +4149,54 @@ function renderDocuments() {
 }
 
 
-/* =========================================================
-   DOCUMENT STATUS
-========================================================= */
-
-function getDocumentStatus(status) {
+function getDocumentStatus(
+    status
+) {
 
     const statuses = {
 
         uploaded: {
-
-            label:
-                "تم تحميل الملف",
-
-            icon:
-                "file-check-2",
-
-            smallIcon:
-                "check-circle-2",
-
-            iconBg:
-                "bg-yellow-500/20",
-
-            iconColor:
-                "text-yellow-300",
-
-            iconBorder:
-                "border-yellow-400/30",
-
+            label: "تم تحميل الملف",
+            icon: "file-check-2",
+            smallIcon: "check-circle-2",
+            iconBg: "bg-yellow-500/20",
+            iconColor: "text-yellow-300",
+            iconBorder: "border-yellow-400/30",
             badge:
-                "px-3 py-1.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 flex items-center gap-1.5"
+                "px-3 py-1.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
         },
 
         review: {
-
-            label:
-                "قيد المراجعة",
-
-            icon:
-                "clock-3",
-
-            smallIcon:
-                "clock-3",
-
-            iconBg:
-                "bg-amber-500/20",
-
-            iconColor:
-                "text-amber-300",
-
-            iconBorder:
-                "border-amber-400/30",
-
+            label: "قيد المراجعة",
+            icon: "clock-3",
+            smallIcon: "clock-3",
+            iconBg: "bg-amber-500/20",
+            iconColor: "text-amber-300",
+            iconBorder: "border-amber-400/30",
             badge:
-                "px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5"
+                "px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30"
         },
 
         accepted: {
-
-            label:
-                "مقبول",
-
-            icon:
-                "circle-check-big",
-
-            smallIcon:
-                "check",
-
-            iconBg:
-                "bg-emerald-500/20",
-
-            iconColor:
-                "text-emerald-300",
-
-            iconBorder:
-                "border-emerald-400/30",
-
+            label: "مقبول",
+            icon: "circle-check-big",
+            smallIcon: "check",
+            iconBg: "bg-emerald-500/20",
+            iconColor: "text-emerald-300",
+            iconBorder: "border-emerald-400/30",
             badge:
-                "px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5"
+                "px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
         },
 
         revision: {
-
-            label:
-                "يحتاج تعديل",
-
-            icon:
-                "file-warning",
-
-            smallIcon:
-                "triangle-alert",
-
-            iconBg:
-                "bg-orange-500/20",
-
-            iconColor:
-                "text-orange-300",
-
-            iconBorder:
-                "border-orange-400/30",
-
+            label: "يحتاج تعديل",
+            icon: "file-warning",
+            smallIcon: "triangle-alert",
+            iconBg: "bg-orange-500/20",
+            iconColor: "text-orange-300",
+            iconBorder: "border-orange-400/30",
             badge:
-                "px-3 py-1.5 rounded-full text-xs font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30 flex items-center gap-1.5"
+                "px-3 py-1.5 rounded-full text-xs font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30"
         }
     };
 
@@ -5004,20 +4207,22 @@ function getDocumentStatus(status) {
 }
 
 
-/* =========================================================
-   DOCUMENT DETAILS
-========================================================= */
-
-function viewDocDetails(id) {
+function viewDocDetails(
+    id
+) {
 
     activeModalDocId =
         id;
 
     const doc =
         documents.find(
-            item =>
-                String(item.id) ===
-                String(id)
+            function (item) {
+
+                return (
+                    String(item.id) ===
+                    String(id)
+                );
+            }
         );
 
     if (!doc) {
@@ -5029,17 +4234,17 @@ function viewDocDetails(id) {
             doc.status
         );
 
-    const fileName =
+    const name =
         document.getElementById(
             "modalFileName"
         );
 
-    const fileDate =
+    const date =
         document.getElementById(
             "modalFileDate"
         );
 
-    const requestName =
+    const request =
         document.getElementById(
             "modalRequestName"
         );
@@ -5054,19 +4259,19 @@ function viewDocDetails(id) {
             "modalStatusBadge"
         );
 
-    if (fileName) {
-        fileName.textContent =
+    if (name) {
+        name.textContent =
             doc.name;
     }
 
-    if (fileDate) {
+    if (date) {
 
-        fileDate.textContent =
+        date.textContent =
             `تاريخ الإرفاق: ${doc.uploadDate} • ${doc.fileSize}`;
     }
 
-    if (requestName) {
-        requestName.textContent =
+    if (request) {
+        request.textContent =
             doc.requestName;
     }
 
@@ -5082,13 +4287,8 @@ function viewDocDetails(id) {
         badge.className =
             status.badge;
 
-        badge.innerHTML = `
-            <i
-                data-lucide="${status.smallIcon}"
-                class="w-3.5 h-3.5"
-            ></i>
-            ${status.label}
-        `;
+        badge.textContent =
+            status.label;
     }
 
     document
@@ -5102,10 +4302,6 @@ function viewDocDetails(id) {
     lucide.createIcons();
 }
 
-
-/* =========================================================
-   CLOSE MODAL
-========================================================= */
 
 function closeModal() {
 
@@ -5123,38 +4319,376 @@ function closeModal() {
 
 
 /* =========================================================
-   TOAST
+   STATS
 ========================================================= */
 
-let toastTimer = null;
+function updateStats() {
 
-function showToast(message) {
+    const accepted =
+        documents.filter(
+            doc =>
+                doc.status ===
+                "accepted"
+        ).length;
+
+    const review =
+        documents.filter(
+            doc =>
+                [
+                    "review",
+                    "uploaded"
+                ].includes(
+                    doc.status
+                )
+        ).length;
+
+    const required =
+        documentRequests.filter(
+            request =>
+                [
+                    "required",
+                    "revision",
+                    "additional"
+                ].includes(
+                    request.status
+                )
+        ).length;
+
+    document
+        .getElementById(
+            "statAcceptedCount"
+        )
+        ?.replaceChildren(
+            document.createTextNode(
+                formatNumber(
+                    accepted
+                )
+            )
+        );
+
+    document
+        .getElementById(
+            "statReviewCount"
+        )
+        ?.replaceChildren(
+            document.createTextNode(
+                formatNumber(
+                    review
+                )
+            )
+        );
+
+    document
+        .getElementById(
+            "statRequiredCount"
+        )
+        ?.replaceChildren(
+            document.createTextNode(
+                formatNumber(
+                    required
+                )
+            )
+        );
+
+    updateProgress();
+}
+
+
+function updateProgress() {
+
+    const total =
+        documentRequests.length;
+
+    const completed =
+        documentRequests.filter(
+            request =>
+                [
+                    "review",
+                    "accepted",
+                    "uploaded"
+                ].includes(
+                    request.status
+                )
+        ).length;
+
+    const percent =
+        total === 0
+            ? 0
+            : Math.round(
+                (
+                    completed /
+                    total
+                ) *
+                100
+            );
+
+    document
+        .getElementById(
+            "progressPercent"
+        )
+        ?.replaceChildren(
+            document.createTextNode(
+                `${percent}%`
+            )
+        );
+
+    document
+        .getElementById(
+            "progressText"
+        )
+        ?.replaceChildren(
+            document.createTextNode(
+                `${completed} من ${total}`
+            )
+        );
+
+    const bar =
+        document.getElementById(
+            "progressBar"
+        );
+
+    if (bar) {
+        bar.style.width =
+            `${percent}%`;
+    }
+}
+
+
+/* =========================================================
+   CLIENT UI
+========================================================= */
+
+function updateClientInterface() {
+
+    if (!currentClient) {
+        return;
+    }
+
+    const name =
+        currentClient.name ||
+        currentClient.company_name ||
+        "شركة العميل";
+
+    document
+        .getElementById(
+            "welcomeClientName"
+        )
+        ?.replaceChildren(
+            document.createTextNode(
+                " " + name
+            )
+        );
+
+    document
+        .getElementById(
+            "clientHeaderName"
+        )
+        ?.replaceChildren(
+            document.createTextNode(
+                name
+            )
+        );
+
+    const avatar =
+        document.getElementById(
+            "clientAvatar"
+        );
+
+    if (avatar) {
+
+        avatar.textContent =
+            name
+                .trim()
+                .charAt(0)
+                .toUpperCase();
+    }
+
+    const year =
+        currentClient.year ||
+        currentClient.fiscal_year ||
+        "2026";
+
+    const yearElement =
+        document.getElementById(
+            "clientHeaderYear"
+        );
+
+    if (yearElement) {
+
+        yearElement.textContent =
+            `الملف المالي ${year}`;
+    }
+}
+
+
+function showPortal() {
+
+    document
+        .getElementById(
+            "loginScreen"
+        )
+        ?.classList.add(
+            "hidden"
+        );
+
+    document
+        .getElementById(
+            "portalScreen"
+        )
+        ?.classList.remove(
+            "hidden"
+        );
+
+    updateClientInterface();
+
+    renderRequests();
+    updateStats();
+    renderDocuments();
+    renderClientMessages();
+    renderNotifications();
+
+    updateMessageBadge();
+    updateNotificationBadge();
+
+    lucide.createIcons();
+}
+
+
+async function handleLogout() {
+
+    try {
+
+        setLoading(
+            true,
+            "جارٍ تسجيل الخروج..."
+        );
+
+        await stopClientRealtime();
+
+        const {
+            error
+        } =
+            await supabaseClient.auth.signOut();
+
+        if (error) {
+            throw error;
+        }
+
+    } catch (error) {
+
+        console.error(
+            "LOGOUT ERROR:",
+            error
+        );
+
+        showToast(
+            error.message ||
+            "تعذر تسجيل الخروج"
+        );
+
+    } finally {
+
+        currentClient =
+            null;
+
+        documents =
+            [];
+
+        documentRequests =
+            [];
+
+        clientMessages =
+            [];
+
+        clientNotifications =
+            [];
+
+        unreadMessagesCount =
+            0;
+
+        document
+            .getElementById(
+                "portalScreen"
+            )
+            ?.classList.add(
+                "hidden"
+            );
+
+        document
+            .getElementById(
+                "loginScreen"
+            )
+            ?.classList.remove(
+                "hidden"
+            );
+
+        updateMessageBadge();
+        updateNotificationBadge();
+
+        setLoading(false);
+    }
+}
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function setLoading(
+    show,
+    text = "جارٍ التحميل..."
+) {
+
+    const overlay =
+        document.getElementById(
+            "loadingOverlay"
+        );
+
+    const label =
+        document.getElementById(
+            "loadingText"
+        );
+
+    if (label) {
+        label.textContent =
+            text;
+    }
+
+    overlay
+        ?.classList.toggle(
+            "show",
+            Boolean(show)
+        );
+}
+
+
+function showToast(
+    message
+) {
 
     const toast =
         document.getElementById(
             "toast"
         );
 
-    const toastMessage =
+    const label =
         document.getElementById(
             "toastMessage"
         );
 
     if (
         !toast ||
-        !toastMessage
+        !label
     ) {
         return;
     }
 
-    toastMessage.textContent =
-        message;
+    label.textContent =
+        message || "";
 
     toast.classList.add(
         "show"
     );
-
-    lucide.createIcons();
 
     clearTimeout(
         toastTimer
@@ -5174,27 +4708,27 @@ function showToast(message) {
 }
 
 
-/* =========================================================
-   HELPERS
-========================================================= */
+function formatNumber(
+    value
+) {
 
-function formatNumber(number) {
+    const number =
+        Number(value) || 0;
 
-    const value =
-        Number(number) || 0;
-
-    return value < 10
-        ? `0${value}`
-        : String(value);
+    return number < 10
+        ? `0${number}`
+        : String(number);
 }
 
 
-function formatFileSize(bytes) {
+function formatFileSize(
+    bytes
+) {
 
     const value =
-        Number(bytes || 0);
+        Number(bytes) || 0;
 
-    if (value === 0) {
+    if (!value) {
         return "0 KB";
     }
 
@@ -5202,18 +4736,58 @@ function formatFileSize(bytes) {
         value / 1024;
 
     if (kb < 1024) {
+
         return `${kb.toFixed(1)} KB`;
     }
 
-    return `${(kb / 1024).toFixed(2)} MB`;
+    return `${(
+        kb / 1024
+    ).toFixed(2)} MB`;
 }
 
 
-function escapeHTML(text) {
+function formatSupabaseDate(
+    value
+) {
+
+    if (!value) {
+        return "—";
+    }
+
+    const date =
+        new Date(value);
 
     if (
-        text === null ||
-        text === undefined
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return String(value);
+    }
+
+    return new Intl.DateTimeFormat(
+        "ar-JO",
+        {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+        }
+    ).format(
+        date
+    );
+}
+
+
+function escapeHTML(
+    value
+) {
+
+    if (
+        value === null ||
+        value === undefined
     ) {
         return "";
     }
@@ -5224,91 +4798,18 @@ function escapeHTML(text) {
         );
 
     div.textContent =
-        String(text);
+        String(value);
 
     return div.innerHTML;
 }
 
 
-function escapeAttribute(text) {
+function escapeAttribute(
+    value
+) {
 
-    return String(
-        text ?? ""
-    )
-        .replaceAll(
-            "&",
-            "&amp;"
-        )
-        .replaceAll(
-            "'",
-            "&#039;"
-        )
-        .replaceAll(
-            '"',
-            "&quot;"
-        )
-        .replaceAll(
-            "<",
-            "&lt;"
-        )
-        .replaceAll(
-            ">",
-            "&gt;"
-        );
-}
-
-
-function formatSupabaseDate(value) {
-
-    if (!value) {
-        return "—";
-    }
-
-    try {
-
-        return new Intl.DateTimeFormat(
-            "ar-JO",
-            {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit"
-            }
-        ).format(
-            new Date(value)
-        );
-
-    } catch (error) {
-
-        return String(value);
-    }
-}
-
-
-/* =========================================================
-   OUTSIDE CLICK - DOCUMENT MODAL
-========================================================= */
-
-const docModal =
-    document.getElementById(
-        "docModal"
-    );
-
-if (docModal) {
-
-    docModal.addEventListener(
-        "click",
-        function (event) {
-
-            if (
-                event.target ===
-                docModal
-            ) {
-
-                closeModal();
-            }
-        }
+    return escapeHTML(
+        value ?? ""
     );
 }
 
@@ -5335,34 +4836,88 @@ supabaseClient.auth.onAuthStateChange(
 
             await stopClientRealtime();
 
-            currentClient = null;
-            window.currentClient = null;
+            currentClient =
+                null;
 
-            documents = [];
-            documentRequests = [];
-            selectedFiles = [];
-            selectedRequestId = null;
+            documents =
+                [];
 
-            clientMessages = [];
-            unreadMessagesCount = 0;
+            documentRequests =
+                [];
 
-            clientNotifications = [];
-            notificationStorageKey = "";
+            clientMessages =
+                [];
+
+            clientNotifications =
+                [];
+
+            unreadMessagesCount =
+                0;
 
             document
-                .getElementById("portalScreen")
-                ?.classList.add("hidden");
+                .getElementById(
+                    "portalScreen"
+                )
+                ?.classList.add(
+                    "hidden"
+                );
 
             document
-                .getElementById("loginScreen")
-                ?.classList.remove("hidden");
+                .getElementById(
+                    "loginScreen"
+                )
+                ?.classList.remove(
+                    "hidden"
+                );
 
-            updateNotificationBadge();
             updateMessageBadge();
+            updateNotificationBadge();
         }
     }
 );
+
+
+/* =========================================================
+   OUTSIDE CLICK
+========================================================= */
+
+document.addEventListener(
+    "click",
+    function (event) {
+
+        document
+            .querySelectorAll(
+                ".notification-wrapper"
+            )
+            .forEach(
+                function (wrapper) {
+
+                    const panel =
+                        wrapper.querySelector(
+                            ".notification-panel"
+                        );
+
+                    if (
+                        panel &&
+                        !wrapper.contains(
+                            event.target
+                        )
+                    ) {
+
+                        panel.classList.remove(
+                            "show"
+                        );
+                    }
+                }
+            );
+    }
+);
+
+
+console.log(
+    "✅ CLIENT PORTAL READY — client_messages + notifications"
+);
+
 </script>
 </body>
 </html>
-
