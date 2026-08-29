@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -12,7 +13,7 @@
     <!-- Lucide -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Supabase - تحميل مرة واحدة فقط -->
+    <!-- Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
@@ -247,6 +248,57 @@
             box-shadow: 0 0 12px rgba(34,197,94,.8);
         }
 
+        .message-list {
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .message-bubble {
+            max-width: 82%;
+            padding: 10px 12px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.08);
+            margin-bottom: 8px;
+        }
+
+        .message-client {
+            margin-right: auto;
+            background: rgba(34,211,238,.16);
+            border-color: rgba(34,211,238,.18);
+        }
+
+        .message-auditor {
+            margin-left: auto;
+            background: rgba(255,255,255,.07);
+        }
+
+        .message-author {
+            font-size: 9px;
+            font-weight: 800;
+            margin-bottom: 4px;
+            color: rgba(207,250,254,.65);
+        }
+
+        .message-text {
+            color: white;
+            font-size: 11px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .message-time {
+            display: block;
+            margin-top: 6px;
+            font-size: 8px;
+            color: rgba(207,250,254,.35);
+        }
+
+        .messages-compose {
+            border-top: 1px solid rgba(255,255,255,.08);
+            padding: 12px;
+        }
+
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -274,10 +326,7 @@
 
 <div id="app">
 
-    <!-- =========================================================
-         LOGIN
-    ========================================================== -->
-
+    <!-- LOGIN -->
     <div
         id="loginScreen"
         class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
@@ -289,13 +338,11 @@
         <div class="glass-panel rounded-[2.5rem] p-8 sm:p-10 max-w-md w-full relative z-10 text-center">
 
             <div class="relative w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-
                 <div class="absolute inset-0 rounded-full border-2 border-cyan-400/40 animate-pulse"></div>
 
                 <div class="w-20 h-20 rounded-full border-2 border-cyan-400 flex items-center justify-center bg-cyan-500/10 text-cyan-300 shadow-[0_0_25px_rgba(56,189,248,0.4)]">
                     <i data-lucide="shield-check" class="w-10 h-10"></i>
                 </div>
-
             </div>
 
             <h1 class="text-2xl font-black text-white tracking-wide mb-1">
@@ -309,7 +356,6 @@
             <form id="loginForm" class="space-y-4 text-right">
 
                 <div class="relative">
-
                     <i
                         data-lucide="user"
                         class="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-cyan-300/70"
@@ -323,11 +369,9 @@
                         class="w-full glass-input pr-12 pl-4 py-3.5 rounded-2xl text-sm"
                         placeholder="البريد الإلكتروني"
                     >
-
                 </div>
 
                 <div class="relative">
-
                     <i
                         data-lucide="lock"
                         class="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-cyan-300/70"
@@ -341,21 +385,17 @@
                         class="w-full glass-input pr-12 pl-4 py-3.5 rounded-2xl text-sm"
                         placeholder="كلمة المرور"
                     >
-
                 </div>
 
                 <div class="flex items-center justify-between text-xs text-cyan-200/80 px-1">
 
                     <label class="flex items-center gap-2 cursor-pointer">
-
                         <input
                             type="checkbox"
                             id="rememberMe"
                             checked
                         >
-
                         <span>تذكرني</span>
-
                     </label>
 
                     <button
@@ -386,11 +426,7 @@
         </div>
     </div>
 
-
-    <!-- =========================================================
-         CLIENT PORTAL
-    ========================================================== -->
-
+    <!-- CLIENT PORTAL -->
     <div id="portalScreen" class="hidden min-h-screen flex flex-col">
 
         <header class="glass-panel sticky top-0 z-40 px-4 sm:px-8 py-4 border-b border-white/10">
@@ -443,7 +479,73 @@
 
                     </div>
 
-                    <!-- Notification -->
+                    <!-- MESSAGES -->
+                    <div class="notification-wrapper">
+
+                        <button
+                            id="messageButton"
+                            type="button"
+                            class="w-10 h-10 rounded-2xl bg-white/10 border border-white/10 text-cyan-100 flex items-center justify-center hover:bg-cyan-500/20 transition relative"
+                            title="الرسائل"
+                        >
+                            <i data-lucide="message-circle" class="w-5 h-5"></i>
+
+                            <span
+                                id="messageBadge"
+                                class="notification-badge hidden"
+                            >0</span>
+                        </button>
+
+                        <div
+                            id="messagePanel"
+                            class="notification-panel"
+                        >
+
+                            <div class="notification-header">
+
+                                <div>
+                                    <h3 class="font-black text-sm text-white">
+                                        الرسائل
+                                    </h3>
+
+                                    <p class="text-[10px] text-cyan-200/50 mt-1">
+                                        التواصل مع فريق التدقيق
+                                    </p>
+                                </div>
+
+                            </div>
+
+                            <div
+                                id="messageList"
+                                class="message-list p-3"
+                            ></div>
+
+                            <div class="messages-compose">
+
+                                <textarea
+                                    id="messageInput"
+                                    rows="2"
+                                    maxlength="2000"
+                                    class="w-full glass-input rounded-xl p-3 text-xs resize-none"
+                                    placeholder="اكتب رسالتك..."
+                                ></textarea>
+
+                                <button
+                                    id="sendMessageButton"
+                                    type="button"
+                                    class="w-full mt-2 py-3 aqua-glow-btn text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2"
+                                >
+                                    <i data-lucide="send" class="w-4 h-4"></i>
+                                    <span>إرسال الرسالة</span>
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- NOTIFICATION -->
                     <div class="notification-wrapper">
 
                         <button
@@ -514,7 +616,6 @@
 
         </header>
 
-
         <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-8 py-8 space-y-8">
 
             <!-- WELCOME -->
@@ -580,7 +681,6 @@
 
             </section>
 
-
             <!-- STATS -->
             <section class="grid grid-cols-1 md:grid-cols-3 gap-5">
 
@@ -589,7 +689,6 @@
                     <div class="flex justify-between items-start">
 
                         <div>
-
                             <p class="text-cyan-200/80 text-xs font-semibold mb-1">
                                 المستندات المقبولة
                             </p>
@@ -598,7 +697,6 @@
                                 id="statAcceptedCount"
                                 class="text-3xl font-black text-emerald-300"
                             >00</h3>
-
                         </div>
 
                         <div class="w-12 h-12 bg-emerald-500/20 border border-emerald-400/30 rounded-2xl flex items-center justify-center text-emerald-300">
@@ -613,13 +711,11 @@
 
                 </div>
 
-
                 <div class="glass-panel glass-panel-hover rounded-3xl p-6 flex flex-col justify-between min-h-44">
 
                     <div class="flex justify-between items-start">
 
                         <div>
-
                             <p class="text-cyan-200/80 text-xs font-semibold mb-1">
                                 تم الرفع / قيد المراجعة
                             </p>
@@ -628,7 +724,6 @@
                                 id="statReviewCount"
                                 class="text-3xl font-black text-yellow-300"
                             >00</h3>
-
                         </div>
 
                         <div class="w-12 h-12 bg-yellow-500/20 border border-yellow-400/30 rounded-2xl flex items-center justify-center text-yellow-300">
@@ -643,13 +738,11 @@
 
                 </div>
 
-
                 <div class="glass-panel glass-panel-hover rounded-3xl p-6 flex flex-col justify-between min-h-44">
 
                     <div class="flex justify-between items-start">
 
                         <div>
-
                             <p class="text-xs font-bold text-cyan-300 mb-1">
                                 المطلوب منك
                             </p>
@@ -658,7 +751,6 @@
                                 id="statRequiredCount"
                                 class="text-3xl font-black text-red-300"
                             >00</h3>
-
                         </div>
 
                         <div class="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-400/30 text-red-300 flex items-center justify-center">
@@ -678,7 +770,6 @@
                 </div>
 
             </section>
-
 
             <!-- REQUESTS -->
             <section
@@ -730,7 +821,6 @@
 
             </section>
 
-
             <!-- UPLOAD -->
             <section
                 id="uploadSection"
@@ -759,7 +849,6 @@
                     </div>
 
                 </div>
-
 
                 <div
                     id="selectedRequestBox"
@@ -793,7 +882,6 @@
 
                 </div>
 
-
                 <div
                     id="dropZone"
                     class="glass-menu-item rounded-3xl p-8 sm:p-12 text-center relative opacity-50 cursor-not-allowed transition-all"
@@ -826,7 +914,6 @@
                     </p>
 
                 </div>
-
 
                 <div
                     id="fileQueue"
@@ -869,7 +956,6 @@
 
             </section>
 
-
             <!-- DOCUMENTS -->
             <section class="glass-panel rounded-3xl p-6 sm:p-8 text-white">
 
@@ -894,7 +980,6 @@
                         </div>
 
                     </div>
-
 
                     <div class="flex flex-wrap items-center gap-1.5 bg-black/30 p-1.5 rounded-2xl border border-white/10 text-xs">
 
@@ -947,7 +1032,6 @@
 
         </main>
 
-
         <footer class="py-6 text-center text-xs text-cyan-200/50 border-t border-white/5">
             جميع الحقوق محفوظة © 2026 — بوابة التدقيق الإلكترونية
         </footer>
@@ -956,11 +1040,7 @@
 
 </div>
 
-
-<!-- =========================================================
-     DOCUMENT MODAL
-========================================================= -->
-
+<!-- DOCUMENT MODAL -->
 <div
     id="docModal"
     class="fixed inset-0 bg-slate-950/80 backdrop-blur-lg z-50 flex items-center justify-center p-4 hidden"
@@ -1054,11 +1134,7 @@
 
 </div>
 
-
-<!-- =========================================================
-     TOAST
-========================================================= -->
-
+<!-- TOAST -->
 <div id="toast" class="toast">
 
     <div class="glass-panel rounded-2xl px-5 py-4 flex items-center gap-3">
@@ -1076,11 +1152,7 @@
 
 </div>
 
-
-<!-- =========================================================
-     LOADING
-========================================================= -->
-
+<!-- LOADING -->
 <div id="loadingOverlay" class="loading-overlay">
 
     <div class="glass-panel rounded-3xl p-8 text-center">
@@ -1098,7 +1170,6 @@
 
 </div>
 
-
 <script>
 /* =========================================================
    SUPABASE CONFIGURATION
@@ -1107,9 +1178,6 @@
 const SUPABASE_URL =
     "https://wwybebjrddamormylzem.supabase.co";
 
-/*
-   ضعي مفتاح Publishable الحالي هنا
-*/
 const SUPABASE_KEY =
     "sb_publishable_r6Pl1Cr0_wypoL1H93lt_g_-BBj_6_u";
 
@@ -1148,6 +1216,7 @@ let currentClient = null;
 
 let documentsRealtimeChannel = null;
 let requestsRealtimeChannel = null;
+let messagesRealtimeChannel = null;
 
 
 /* =========================================================
@@ -1156,6 +1225,14 @@ let requestsRealtimeChannel = null;
 
 let clientNotifications = [];
 let notificationStorageKey = "";
+
+
+/* =========================================================
+   MESSAGES
+========================================================= */
+
+let clientMessages = [];
+let unreadMessagesCount = 0;
 
 
 /* =========================================================
@@ -1171,9 +1248,7 @@ document.addEventListener(
             lucide.createIcons();
 
             const loginForm =
-                document.getElementById(
-                    "loginForm"
-                );
+                document.getElementById("loginForm");
 
             if (loginForm) {
 
@@ -1184,8 +1259,8 @@ document.addEventListener(
             }
 
             setupDragAndDrop();
-
             setupNotificationEvents();
+            setupMessageEvents();
 
             filterDocuments("all");
 
@@ -1298,6 +1373,8 @@ async function checkExistingSession() {
 
         await initializeClientNotifications();
 
+        await loadClientMessages();
+
         await startClientRealtime();
 
         showPortal();
@@ -1354,18 +1431,6 @@ async function handleLogin(event) {
 
         showToast(
             "يرجى إدخال البريد الإلكتروني وكلمة المرور"
-        );
-
-        return;
-    }
-
-    if (
-        !SUPABASE_KEY ||
-        SUPABASE_KEY === "YOUR_PUBLISHABLE_KEY"
-    ) {
-
-        showToast(
-            "ضعي Publishable Key الخاص بـ Supabase أولًا"
         );
 
         return;
@@ -1443,6 +1508,8 @@ async function handleLogin(event) {
         await loadClientData();
 
         await initializeClientNotifications();
+
+        await loadClientMessages();
 
         await startClientRealtime();
 
@@ -1716,9 +1783,7 @@ async function loadClientData() {
         }
 
         renderRequests();
-
         updateStats();
-
         renderDocuments();
 
     } catch (error) {
@@ -2069,31 +2134,578 @@ function setupNotificationEvents() {
             }
         );
     }
+}
+
+
+/* =========================================================
+   MESSAGES
+========================================================= */
+
+async function loadClientMessages() {
+
+    if (!currentClient?.id) {
+        return;
+    }
+
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient
+                .from("messages")
+                .select("*")
+                .eq(
+                    "client_id",
+                    currentClient.id
+                )
+                .order(
+                    "created_at",
+                    {
+                        ascending: true
+                    }
+                );
+
+        if (error) {
+
+            console.error(
+                "MESSAGES LOAD ERROR:",
+                error
+            );
+
+            showToast(
+                "تعذر تحميل الرسائل"
+            );
+
+            return;
+        }
+
+        clientMessages =
+            data || [];
+
+        unreadMessagesCount =
+            clientMessages.filter(
+                message =>
+                    message.sender_role === "auditor" &&
+                    !message.read_at
+            ).length;
+
+        renderClientMessages();
+        updateMessageBadge();
+
+    } catch (error) {
+
+        console.error(
+            "LOAD CLIENT MESSAGES ERROR:",
+            error
+        );
+    }
+}
+
+
+function renderClientMessages() {
+
+    const container =
+        document.getElementById(
+            "messageList"
+        );
+
+    if (!container) {
+        return;
+    }
+
+    if (clientMessages.length === 0) {
+
+        container.innerHTML = `
+
+            <div class="text-center py-10 px-4">
+
+                <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 mx-auto mb-4 flex items-center justify-center text-cyan-300">
+
+                    <i
+                        data-lucide="message-circle-off"
+                        class="w-6 h-6"
+                    ></i>
+
+                </div>
+
+                <p class="text-sm font-bold text-white">
+                    لا توجد رسائل
+                </p>
+
+                <p class="text-[10px] text-cyan-200/50 mt-2">
+                    ابدأ محادثة مع فريق التدقيق.
+                </p>
+
+            </div>
+
+        `;
+
+        lucide.createIcons();
+        return;
+    }
+
+    container.innerHTML =
+        clientMessages
+            .map(
+                message => {
+
+                    const isClient =
+                        message.sender_role === "client";
+
+                    return `
+
+                        <div class="flex ${
+                            isClient
+                                ? "justify-end"
+                                : "justify-start"
+                        }">
+
+                            <div
+                                class="message-bubble ${
+                                    isClient
+                                        ? "message-client"
+                                        : "message-auditor"
+                                }"
+                            >
+
+                                <div class="message-author">
+                                    ${
+                                        isClient
+                                            ? "أنت"
+                                            : "فريق التدقيق"
+                                    }
+                                </div>
+
+                                <div class="message-text">
+                                    ${escapeHTML(
+                                        message.message
+                                    )}
+                                </div>
+
+                                <time class="message-time">
+                                    ${formatSupabaseDate(
+                                        message.created_at
+                                    )}
+                                </time>
+
+                            </div>
+
+                        </div>
+                    `;
+                }
+            )
+            .join("");
+
+    container.scrollTop =
+        container.scrollHeight;
+
+    lucide.createIcons();
+}
+
+
+function updateMessageBadge() {
+
+    const badge =
+        document.getElementById(
+            "messageBadge"
+        );
+
+    if (!badge) {
+        return;
+    }
+
+    if (unreadMessagesCount > 0) {
+
+        badge.textContent =
+            unreadMessagesCount > 99
+                ? "99+"
+                : unreadMessagesCount;
+
+        badge.classList.remove(
+            "hidden"
+        );
+
+    } else {
+
+        badge.textContent =
+            "0";
+
+        badge.classList.add(
+            "hidden"
+        );
+    }
+}
+
+
+async function sendClientMessage() {
+
+    if (!currentClient?.id) {
+
+        showToast(
+            "لم يتم التعرف على حساب العميل"
+        );
+
+        return;
+    }
+
+    const input =
+        document.getElementById(
+            "messageInput"
+        );
+
+    const button =
+        document.getElementById(
+            "sendMessageButton"
+        );
+
+    const message =
+        input?.value.trim() || "";
+
+    if (!message) {
+
+        showToast(
+            "اكتب الرسالة أولًا"
+        );
+
+        return;
+    }
+
+    if (message.length > 2000) {
+
+        showToast(
+            "الرسالة طويلة جدًا"
+        );
+
+        return;
+    }
+
+    try {
+
+        if (button) {
+
+            button.disabled = true;
+            button.style.opacity = "0.7";
+        }
+
+        const {
+            data: userData,
+            error: userError
+        } =
+            await supabaseClient.auth.getUser();
+
+        if (userError) {
+            throw userError;
+        }
+
+        const user =
+            userData?.user;
+
+        if (!user) {
+
+            throw new Error(
+                "انتهت جلسة تسجيل الدخول"
+            );
+        }
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient
+                .from("messages")
+                .insert({
+                    client_id:
+                        currentClient.id,
+
+                    sender_id:
+                        user.id,
+
+                    sender_role:
+                        "client",
+
+                    message:
+                        message
+                })
+                .select()
+                .single();
+
+        if (error) {
+            throw error;
+        }
+
+        if (
+            data &&
+            !clientMessages.some(
+                item =>
+                    String(item.id) ===
+                    String(data.id)
+            )
+        ) {
+
+            clientMessages.push(data);
+
+            clientMessages.sort(
+                (a, b) =>
+                    new Date(a.created_at) -
+                    new Date(b.created_at)
+            );
+        }
+
+        input.value = "";
+
+        renderClientMessages();
+
+        showToast(
+            "تم إرسال الرسالة"
+        );
+
+    } catch (error) {
+
+        console.error(
+            "SEND MESSAGE ERROR:",
+            error
+        );
+
+        showToast(
+            error?.message ||
+            "تعذر إرسال الرسالة"
+        );
+
+    } finally {
+
+        if (button) {
+
+            button.disabled = false;
+            button.style.opacity = "1";
+        }
+    }
+}
+
+
+async function markClientMessagesRead() {
+
+    if (!currentClient?.id) {
+        return;
+    }
+
+    try {
+
+        const unreadIds =
+            clientMessages
+                .filter(
+                    message =>
+                        message.sender_role === "auditor" &&
+                        !message.read_at
+                )
+                .map(
+                    message =>
+                        message.id
+                );
+
+        if (unreadIds.length === 0) {
+
+            unreadMessagesCount = 0;
+            updateMessageBadge();
+
+            return;
+        }
+
+        const now =
+            new Date().toISOString();
+
+        const {
+            error
+        } =
+            await supabaseClient
+                .from("messages")
+                .update({
+                    read_at: now
+                })
+                .in(
+                    "id",
+                    unreadIds
+                );
+
+        if (error) {
+
+            console.error(
+                "MARK READ ERROR:",
+                error
+            );
+
+            return;
+        }
+
+        clientMessages =
+            clientMessages.map(
+                message => {
+
+                    if (
+                        unreadIds.includes(
+                            message.id
+                        )
+                    ) {
+
+                        return {
+                            ...message,
+                            read_at: now
+                        };
+                    }
+
+                    return message;
+                }
+            );
+
+        unreadMessagesCount = 0;
+
+        updateMessageBadge();
+
+    } catch (error) {
+
+        console.error(
+            "MARK CLIENT MESSAGES READ ERROR:",
+            error
+        );
+    }
+}
+
+
+function setupMessageEvents() {
+
+    const button =
+        document.getElementById(
+            "messageButton"
+        );
+
+    const panel =
+        document.getElementById(
+            "messagePanel"
+        );
+
+    const sendButton =
+        document.getElementById(
+            "sendMessageButton"
+        );
+
+    const input =
+        document.getElementById(
+            "messageInput"
+        );
+
+    if (button && panel) {
+
+        button.addEventListener(
+            "click",
+            async function(event) {
+
+                event.stopPropagation();
+
+                const notificationPanel =
+                    document.getElementById(
+                        "notificationPanel"
+                    );
+
+                if (notificationPanel) {
+
+                    notificationPanel.classList.remove(
+                        "show"
+                    );
+                }
+
+                const willOpen =
+                    !panel.classList.contains(
+                        "show"
+                    );
+
+                panel.classList.toggle(
+                    "show"
+                );
+
+                if (willOpen) {
+
+                    await markClientMessagesRead();
+
+                    setTimeout(
+                        function() {
+
+                            const list =
+                                document.getElementById(
+                                    "messageList"
+                                );
+
+                            if (list) {
+
+                                list.scrollTop =
+                                    list.scrollHeight;
+                            }
+
+                        },
+                        60
+                    );
+                }
+            }
+        );
+    }
+
+    if (sendButton) {
+
+        sendButton.addEventListener(
+            "click",
+            sendClientMessage
+        );
+    }
+
+    if (input) {
+
+        input.addEventListener(
+            "keydown",
+            function(event) {
+
+                if (
+                    event.key === "Enter" &&
+                    !event.shiftKey
+                ) {
+
+                    event.preventDefault();
+
+                    sendClientMessage();
+                }
+            }
+        );
+    }
 
     document.addEventListener(
         "click",
-        function (event) {
+        function(event) {
 
-            const wrapper =
-                document.querySelector(
+            const wrappers =
+                document.querySelectorAll(
                     ".notification-wrapper"
                 );
 
-            const panel =
-                document.getElementById(
-                    "notificationPanel"
-                );
+            wrappers.forEach(
+                wrapper => {
 
-            if (
-                wrapper &&
-                panel &&
-                !wrapper.contains(event.target)
-            ) {
+                    const panel =
+                        wrapper.querySelector(
+                            ".notification-panel"
+                        );
 
-                panel.classList.remove(
-                    "show"
-                );
-            }
+                    if (
+                        panel &&
+                        !wrapper.contains(
+                            event.target
+                        )
+                    ) {
+
+                        panel.classList.remove(
+                            "show"
+                        );
+                    }
+                }
+            );
         }
     );
 }
@@ -2118,10 +2730,7 @@ async function startClientRealtime() {
         currentClient.id;
 
 
-    /* =====================================================
-       DOCUMENTS CHANNEL
-    ===================================================== */
-
+    /* DOCUMENTS */
     documentsRealtimeChannel =
         supabaseClient
             .channel(
@@ -2133,9 +2742,10 @@ async function startClientRealtime() {
                     event: "*",
                     schema: "public",
                     table: "documents",
-                    filter: `client_id=eq.${clientId}`
+                    filter:
+                        `client_id=eq.${clientId}`
                 },
-                async function (payload) {
+                async function(payload) {
 
                     console.log(
                         "DOCUMENT REALTIME:",
@@ -2157,23 +2767,23 @@ async function startClientRealtime() {
 
                         await loadClientData();
 
+                        const currentUserId =
+                            await getCurrentUserId();
+
                         if (
                             String(
                                 row.uploaded_by || ""
                             ) !==
                             String(
-                                (await getCurrentUserId()) || ""
+                                currentUserId || ""
                             )
                         ) {
 
                             addClientNotification(
                                 "تم استلام مستند جديد",
-                                row.name || "تمت إضافة مستند جديد."
+                                row.name ||
+                                "تمت إضافة مستند جديد."
                             );
-
-                        } else {
-
-                            await loadClientData();
                         }
 
                         return;
@@ -2206,7 +2816,8 @@ async function startClientRealtime() {
 
                             addClientNotification(
                                 "تم تحديث مستند",
-                                row.name || "تم تحديث أحد المستندات."
+                                row.name ||
+                                "تم تحديث أحد المستندات."
                             );
                         }
 
@@ -2244,12 +2855,10 @@ async function startClientRealtime() {
                             `تم حذف ${deletedName}.`
                         );
                     }
-
-                    lucide.createIcons();
                 }
             )
             .subscribe(
-                function (status) {
+                function(status) {
 
                     console.log(
                         "DOCUMENTS REALTIME STATUS:",
@@ -2259,10 +2868,7 @@ async function startClientRealtime() {
             );
 
 
-    /* =====================================================
-       REQUESTS CHANNEL
-    ===================================================== */
-
+    /* REQUESTS */
     requestsRealtimeChannel =
         supabaseClient
             .channel(
@@ -2274,9 +2880,10 @@ async function startClientRealtime() {
                     event: "*",
                     schema: "public",
                     table: "document_requests",
-                    filter: `client_id=eq.${clientId}`
+                    filter:
+                        `client_id=eq.${clientId}`
                 },
-                async function (payload) {
+                async function(payload) {
 
                     console.log(
                         "REQUEST REALTIME:",
@@ -2300,7 +2907,8 @@ async function startClientRealtime() {
 
                         addClientNotification(
                             "طلب مستند جديد",
-                            row.title || "تمت إضافة طلب مستند جديد من فريق التدقيق."
+                            row.title ||
+                            "تمت إضافة طلب مستند جديد من فريق التدقيق."
                         );
 
                         return;
@@ -2333,7 +2941,8 @@ async function startClientRealtime() {
 
                             addClientNotification(
                                 "تم تحديث طلب المستند",
-                                row.title || "تم تحديث أحد طلبات المستندات."
+                                row.title ||
+                                "تم تحديث أحد طلبات المستندات."
                             );
                         }
 
@@ -2349,18 +2958,112 @@ async function startClientRealtime() {
 
                         addClientNotification(
                             "تم حذف طلب مستند",
-                            oldRow.title || "تم حذف أحد طلبات المستندات."
+                            oldRow.title ||
+                            "تم حذف أحد طلبات المستندات."
                         );
                     }
-
-                    lucide.createIcons();
                 }
             )
             .subscribe(
-                function (status) {
+                function(status) {
 
                     console.log(
                         "REQUESTS REALTIME STATUS:",
+                        status
+                    );
+                }
+            );
+
+
+    /* MESSAGES */
+    messagesRealtimeChannel =
+        supabaseClient
+            .channel(
+                `client_messages_${clientId}`
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "messages",
+                    filter:
+                        `client_id=eq.${clientId}`
+                },
+                async function(payload) {
+
+                    console.log(
+                        "MESSAGE REALTIME:",
+                        payload
+                    );
+
+                    const message =
+                        payload?.new;
+
+                    if (!message) {
+                        return;
+                    }
+
+                    const alreadyExists =
+                        clientMessages.some(
+                            item =>
+                                String(item.id) ===
+                                String(message.id)
+                        );
+
+                    if (!alreadyExists) {
+
+                        clientMessages.push(
+                            message
+                        );
+                    }
+
+                    clientMessages.sort(
+                        (a, b) =>
+                            new Date(a.created_at) -
+                            new Date(b.created_at)
+                    );
+
+                    if (
+                        message.sender_role ===
+                        "auditor"
+                    ) {
+
+                        const panel =
+                            document.getElementById(
+                                "messagePanel"
+                            );
+
+                        const panelIsOpen =
+                            panel?.classList.contains(
+                                "show"
+                            );
+
+                        if (!panelIsOpen) {
+
+                            unreadMessagesCount++;
+
+                            updateMessageBadge();
+
+                            addClientNotification(
+                                "رسالة جديدة",
+                                message.message
+                            );
+
+                        } else {
+
+                            await markClientMessagesRead();
+                        }
+                    }
+
+                    renderClientMessages();
+                }
+            )
+            .subscribe(
+                function(status) {
+
+                    console.log(
+                        "MESSAGES REALTIME STATUS:",
                         status
                     );
                 }
@@ -2384,8 +3087,7 @@ async function stopClientRealtime() {
                 documentsRealtimeChannel
             );
 
-            documentsRealtimeChannel =
-                null;
+            documentsRealtimeChannel = null;
         }
 
         if (
@@ -2396,8 +3098,18 @@ async function stopClientRealtime() {
                 requestsRealtimeChannel
             );
 
-            requestsRealtimeChannel =
-                null;
+            requestsRealtimeChannel = null;
+        }
+
+        if (
+            messagesRealtimeChannel
+        ) {
+
+            await supabaseClient.removeChannel(
+                messagesRealtimeChannel
+            );
+
+            messagesRealtimeChannel = null;
         }
 
     } catch (error) {
@@ -2509,14 +3221,12 @@ function showPortal() {
     updateClientInterface();
 
     renderRequests();
-
     updateStats();
-
     renderDocuments();
-
     renderNotifications();
-
+    renderClientMessages();
     updateNotificationBadge();
+    updateMessageBadge();
 
     lucide.createIcons();
 }
@@ -2632,8 +3342,22 @@ async function handleLogout() {
         selectedFiles = [];
         selectedRequestId = null;
 
+        clientMessages = [];
+        unreadMessagesCount = 0;
+
         notificationStorageKey = "";
         clientNotifications = [];
+
+        const messagePanel =
+            document.getElementById(
+                "messagePanel"
+            );
+
+        if (messagePanel) {
+            messagePanel.classList.remove(
+                "show"
+            );
+        }
 
         document
             .getElementById("portalScreen")
@@ -2653,6 +3377,8 @@ async function handleLogout() {
         }
 
         closeModal();
+
+        updateMessageBadge();
 
         showToast(
             "تم تسجيل الخروج بنجاح"
@@ -2903,7 +3629,6 @@ function renderRequests() {
             .join("");
 
     lucide.createIcons();
-
     updateProgress();
 }
 
@@ -3728,11 +4453,8 @@ async function uploadFiles() {
         }
 
         renderFileQueue();
-
         renderRequests();
-
         updateStats();
-
         renderDocuments();
 
         addClientNotification(
@@ -4565,7 +5287,7 @@ function formatSupabaseDate(value) {
 
 
 /* =========================================================
-   OUTSIDE CLICK
+   OUTSIDE CLICK - DOCUMENT MODAL
 ========================================================= */
 
 const docModal =
@@ -4621,6 +5343,9 @@ supabaseClient.auth.onAuthStateChange(
             selectedFiles = [];
             selectedRequestId = null;
 
+            clientMessages = [];
+            unreadMessagesCount = 0;
+
             clientNotifications = [];
             notificationStorageKey = "";
 
@@ -4633,9 +5358,11 @@ supabaseClient.auth.onAuthStateChange(
                 ?.classList.remove("hidden");
 
             updateNotificationBadge();
+            updateMessageBadge();
         }
     }
 );
 </script>
 </body>
 </html>
+
