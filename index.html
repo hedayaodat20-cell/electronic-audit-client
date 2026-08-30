@@ -882,6 +882,7 @@
 
                 </div>
 
+
                 <div
                     id="dropZone"
                     class="glass-menu-item rounded-3xl p-8 sm:p-12 text-center relative opacity-50 cursor-not-allowed transition-all"
@@ -1690,8 +1691,20 @@ async function loadClientNotifications() {
         return;
     }
 
+    // الإشعارات مخصصة فقط لطلبات المستندات من المدقق.
     clientNotifications =
-        data || [];
+        (data || []).filter(
+            function (notification) {
+                const text = `${notification.title || ""} ${notification.message || ""}`.toLowerCase();
+                return (
+                    Boolean(notification.request_id) ||
+                    text.includes("طلب مستند") ||
+                    text.includes("طلب المستند") ||
+                    text.includes("document request") ||
+                    text.includes("new document request")
+                );
+            }
+        );
 
     renderNotifications();
     updateNotificationBadge();
@@ -1839,6 +1852,19 @@ function updateNotificationBadge() {
 async function markNotificationRead(
     id
 ) {
+
+    const localItem = clientNotifications.find(
+        notification =>
+            String(notification.id) === String(id) &&
+            notification.local_only
+    );
+
+    if (localItem) {
+        localItem.read = true;
+        renderNotifications();
+        updateNotificationBadge();
+        return;
+    }
 
     const {
         error
@@ -2231,11 +2257,28 @@ function renderClientMessages() {
                                     )}
                                 </div>
 
-                                <time class="message-time">
-                                    ${formatSupabaseDate(
-                                        message.created_at
-                                    )}
-                                </time>
+                                <div class="flex items-center justify-between gap-2 mt-1">
+                                    <time class="message-time m-0">
+                                        ${formatSupabaseDate(
+                                            message.created_at
+                                        )}
+                                    </time>
+
+                                    ${
+                                        isClient
+                                            ? `
+                                                <button
+                                                    type="button"
+                                                    title="حذف الرسالة"
+                                                    onclick="deleteClientMessage('${escapeAttribute(message.id)}')"
+                                                    class="text-cyan-200/40 hover:text-red-400 transition p-1 rounded-lg"
+                                                >
+                                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                                </button>
+                                            `
+                                            : ""
+                                    }
+                                </div>
 
                             </div>
 
@@ -2448,6 +2491,86 @@ async function sendClientMessage() {
         if (button) {
             button.disabled = false;
         }
+    }
+}
+
+
+async function deleteClientMessage(id) {
+
+    if (!currentClient?.id) {
+        showToast("لم يتم التعرف على حساب العميل");
+        return;
+    }
+
+    const message =
+        clientMessages.find(
+            function (item) {
+                return String(item.id) === String(id);
+            }
+        );
+
+    if (!message) {
+        return;
+    }
+
+    if (message.sender !== "client") {
+        showToast("يمكنك حذف رسائلك المرسلة فقط");
+        return;
+    }
+
+    if (!confirm("هل تريد حذف هذه الرسالة؟")) {
+        return;
+    }
+
+    try {
+
+        const {
+            data: userData,
+            error: userError
+        } = await supabaseClient.auth.getUser();
+
+        if (userError) {
+            throw userError;
+        }
+
+        const user = userData?.user;
+
+        if (!user) {
+            throw new Error("انتهت جلسة تسجيل الدخول");
+        }
+
+        const { error } =
+            await supabaseClient
+                .from("client_messages")
+                .delete()
+                .eq("id", id)
+                .eq("client_id", currentClient.id)
+                .eq("sender", "client")
+                .eq("sender_user_id", user.id);
+
+        if (error) {
+            throw error;
+        }
+
+        clientMessages =
+            clientMessages.filter(
+                function (item) {
+                    return String(item.id) !== String(id);
+                }
+            );
+
+        renderClientMessages();
+        updateMessageBadge();
+        showToast("تم حذف الرسالة");
+
+    } catch (error) {
+
+        console.error("DELETE CLIENT MESSAGE ERROR:", error);
+
+        showToast(
+            error.message ||
+            "تعذر حذف الرسالة"
+        );
     }
 }
 
@@ -2740,10 +2863,42 @@ async function startClientRealtime() {
                     filter:
                         `client_id=eq.${clientId}`
                 },
-                async function () {
+                async function (payload) {
 
                     await loadClientData();
 
+                    if (payload?.eventType === "INSERT" && payload?.new) {
+                        const request = payload.new;
+                        const exists = clientNotifications.some(
+                            notification =>
+                                String(notification.request_id || "") === String(request.id)
+                        );
+
+                        if (!exists) {
+                            clientNotifications.unshift({
+                                id: `request-${request.id}`,
+                                request_id: request.id,
+                                user_id: currentClient?.user_id || null,
+                                client_id: currentClient?.id || null,
+                                audience: "client",
+                                title: "طلب مستند جديد",
+                                message: request.title
+                                    ? `تم طلب المستند: ${request.title}`
+                                    : "تم طلب مستند جديد منك من فريق التدقيق.",
+                                read: false,
+                                created_at: request.created_at || new Date().toISOString(),
+                                local_only: true
+                            });
+
+                            renderNotifications();
+                            updateNotificationBadge();
+                            showToast(
+                                request.title
+                                    ? `تم طلب المستند: ${request.title}`
+                                    : "تم طلب مستند جديد منك من فريق التدقيق."
+                            );
+                        }
+                    }
                 }
             )
             .subscribe(
@@ -2968,6 +3123,18 @@ async function startClientRealtime() {
                             currentClient.user_id
                         )
                     ) {
+                        return;
+                    }
+
+                    const notificationText = `${row.title || ""} ${row.message || ""}`.toLowerCase();
+                    const isDocumentRequestNotification =
+                        Boolean(row.request_id) ||
+                        notificationText.includes("طلب مستند") ||
+                        notificationText.includes("طلب المستند") ||
+                        notificationText.includes("document request") ||
+                        notificationText.includes("new document request");
+
+                    if (!isDocumentRequestNotification) {
                         return;
                     }
 
@@ -3659,6 +3826,63 @@ async function uploadFiles() {
    REQUESTS
 ========================================================= */
 
+function isBankStatementRequest(request) {
+    const text = `${request?.title || ""} ${request?.description || ""}`.toLowerCase();
+    return [
+        "كشف حساب",
+        "كشوفات الحساب",
+        "الحسابات البنكية",
+        "bank statement",
+        "bank statements",
+        "bank_statement",
+        "bank-statements"
+    ].some(keyword => text.includes(keyword.toLowerCase()));
+}
+
+function isReceivablesDetailRequest(request) {
+    const text = `${request?.title || ""} ${request?.description || ""}`.toLowerCase();
+    return [
+        "تفاصيل الذمم المدينة",
+        "الذمم المدينة",
+        "accounts receivable details",
+        "accounts receivable"
+    ].some(keyword => text.includes(keyword.toLowerCase()));
+}
+
+function requestStatusPriority(status) {
+    return { required: 0, revision: 1, additional: 2, uploaded: 3, review: 4, accepted: 5 }[status] ?? 99;
+}
+
+function pickSingleRequest(requests) {
+    return [...requests].sort((a, b) => {
+        const priorityDiff = requestStatusPriority(a.status) - requestStatusPriority(b.status);
+        if (priorityDiff !== 0) return priorityDiff;
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    })[0] || null;
+}
+
+function getVisibleClientRequests() {
+    const singleBankRequest = pickSingleRequest(
+        documentRequests.filter(isBankStatementRequest)
+    );
+    const singleReceivablesRequest = pickSingleRequest(
+        documentRequests.filter(isReceivablesDetailRequest)
+    );
+
+    const bankId = singleBankRequest ? String(singleBankRequest.id) : null;
+    const receivablesId = singleReceivablesRequest ? String(singleReceivablesRequest.id) : null;
+
+    return documentRequests.filter(request => {
+        if (isBankStatementRequest(request)) {
+            return String(request.id) === bankId;
+        }
+        if (isReceivablesDetailRequest(request)) {
+            return String(request.id) === receivablesId;
+        }
+        return true;
+    });
+}
+
 function renderRequests() {
 
     const container =
@@ -3670,8 +3894,11 @@ function renderRequests() {
         return;
     }
 
+    const visibleRequests =
+        getVisibleClientRequests();
+
     const completed =
-        documentRequests.filter(
+        visibleRequests.filter(
             function (request) {
 
                 return [
@@ -3690,11 +3917,11 @@ function renderRequests() {
         )
         ?.replaceChildren(
             document.createTextNode(
-                `${completed} من ${documentRequests.length} مكتملة`
+                `${completed} من ${visibleRequests.length} مكتملة`
             )
         );
 
-    if (!documentRequests.length) {
+    if (!visibleRequests.length) {
 
         container.innerHTML = `
             <div class="lg:col-span-2 text-center py-14 text-cyan-200/60 rounded-3xl border border-dashed border-white/10 bg-black/20">
@@ -3727,7 +3954,7 @@ function renderRequests() {
     }
 
     container.innerHTML =
-        documentRequests
+        visibleRequests
             .map(
                 function (request) {
 
@@ -4135,6 +4362,15 @@ function renderDocuments() {
                                         التفاصيل
                                     </button>
 
+                                    <button
+                                        type="button"
+                                        onclick="deleteClientDocument('${escapeAttribute(doc.id)}')"
+                                        title="حذف المستند"
+                                        class="bg-white/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 font-bold px-3 py-2 rounded-xl text-xs border border-red-400/20"
+                                    >
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+
                                 </div>
 
                             </div>
@@ -4146,6 +4382,112 @@ function renderDocuments() {
             .join("");
 
     lucide.createIcons();
+}
+
+
+async function deleteClientDocument(id) {
+
+    if (!currentClient?.id) {
+        showToast("لم يتم التعرف على حساب العميل");
+        return;
+    }
+
+    const doc =
+        documents.find(
+            function (item) {
+                return String(item.id) === String(id);
+            }
+        );
+
+    if (!doc) {
+        return;
+    }
+
+    if (!confirm("هل تريد حذف هذا المستند؟")) {
+        return;
+    }
+
+    try {
+
+        setLoading(true, "جارٍ حذف المستند...");
+
+        const {
+            data: userData,
+            error: userError
+        } = await supabaseClient.auth.getUser();
+
+        if (userError) {
+            throw userError;
+        }
+
+        const user = userData?.user;
+
+        if (!user) {
+            throw new Error("انتهت جلسة تسجيل الدخول");
+        }
+
+        if (doc.uploadedBy && String(doc.uploadedBy) !== String(user.id)) {
+            throw new Error("يمكنك حذف المستندات التي رفعتها أنت فقط");
+        }
+
+        if (doc.filePath) {
+            const { error: storageError } =
+                await supabaseClient
+                    .storage
+                    .from("client-documents")
+                    .remove([doc.filePath]);
+
+            if (storageError) {
+                console.warn("DOCUMENT STORAGE DELETE:", storageError.message);
+            }
+        }
+
+        const { error: deleteError } =
+            await supabaseClient
+                .from("documents")
+                .delete()
+                .eq("id", id)
+                .eq("client_id", currentClient.id);
+
+        if (deleteError) {
+            throw deleteError;
+        }
+
+        // Reset the request only when this was the last uploaded document for it.
+        if (doc.requestId) {
+            const { count, error: countError } =
+                await supabaseClient
+                    .from("documents")
+                    .select("id", { count: "exact", head: true })
+                    .eq("request_id", doc.requestId)
+                    .eq("client_id", currentClient.id);
+
+            if (!countError && Number(count || 0) === 0) {
+                await supabaseClient
+                    .from("document_requests")
+                    .update({ status: "required" })
+                    .eq("id", doc.requestId)
+                    .eq("client_id", currentClient.id)
+                    .eq("status", "uploaded");
+            }
+        }
+
+        closeModal();
+        await loadClientData();
+        showToast("تم حذف المستند");
+
+    } catch (error) {
+
+        console.error("DELETE DOCUMENT ERROR:", error);
+
+        showToast(
+            error.message ||
+            "تعذر حذف المستند"
+        );
+
+    } finally {
+        setLoading(false);
+    }
 }
 
 
