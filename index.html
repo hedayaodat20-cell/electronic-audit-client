@@ -401,7 +401,7 @@
 
                     <button
                         type="button"
-                        onclick="showToast('ميزة استعادة كلمة المرور سنضيفها لاحقًا')"
+                        onclick="openAccountActivationModal()"
                         class="hover:text-cyan-300"
                     >
                         نسيت كلمة المرور؟
@@ -424,6 +424,25 @@
                 منظومة تدقيق رقمية آمنة • متابعة المستندات والطلبات
             </div>
 
+        </div>
+    </div>
+
+    <div id="activationModal" class="hidden fixed inset-0 z-[1200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="glass-panel rounded-3xl p-6 max-w-md w-full text-right">
+            <div class="flex items-center justify-between gap-3 mb-5">
+                <div>
+                    <h2 class="text-lg font-black text-white">تفعيل / استعادة كلمة المرور</h2>
+                    <p class="text-[10px] text-cyan-200/60 mt-1">أدخلي رمز التفعيل الذي أعطاكِ إياه المدقق واختاري كلمة مرورك السرية.</p>
+                </div>
+                <button type="button" class="text-cyan-200" onclick="closeAccountActivationModal()">✕</button>
+            </div>
+            <form id="activationForm" class="space-y-3">
+                <input id="activationEmail" type="email" required class="w-full glass-input px-4 py-3 rounded-2xl text-sm" placeholder="البريد الإلكتروني">
+                <input id="activationCode" type="text" required autocomplete="one-time-code" class="w-full glass-input px-4 py-3 rounded-2xl text-sm" placeholder="رمز التفعيل المؤقت">
+                <input id="newClientPassword" type="password" required minlength="8" autocomplete="new-password" class="w-full glass-input px-4 py-3 rounded-2xl text-sm" placeholder="كلمة المرور الجديدة">
+                <input id="confirmClientPassword" type="password" required minlength="8" autocomplete="new-password" class="w-full glass-input px-4 py-3 rounded-2xl text-sm" placeholder="تأكيد كلمة المرور الجديدة">
+                <button id="activationButton" type="submit" class="w-full py-3.5 aqua-glow-btn text-white font-bold rounded-2xl">حفظ كلمة المرور</button>
+            </form>
         </div>
     </div>
 
@@ -1261,6 +1280,38 @@ let reportsRealtimeChannel = null;
 let toastTimer = null;
 
 
+function openAccountActivationModal(){
+  const modal=document.getElementById("activationModal");
+  if(!modal)return;
+  const loginEmail=document.getElementById("loginEmail")?.value?.trim()||"";
+  const emailField=document.getElementById("activationEmail");
+  if(emailField && loginEmail) emailField.value=loginEmail;
+  modal.classList.remove("hidden");
+}
+function closeAccountActivationModal(){document.getElementById("activationModal")?.classList.add("hidden");}
+async function handleAccountActivation(event){
+  event.preventDefault();
+  const email=document.getElementById("activationEmail")?.value?.trim()?.toLowerCase()||"";
+  const activationCode=document.getElementById("activationCode")?.value?.trim()?.toUpperCase()||"";
+  const newPassword=document.getElementById("newClientPassword")?.value||"";
+  const confirmPassword=document.getElementById("confirmClientPassword")?.value||"";
+  const button=document.getElementById("activationButton");
+  if(!email||!activationCode||!newPassword||!confirmPassword){showToast("بيانات ناقصة","أكملي جميع الحقول.");return;}
+  if(newPassword.length<8){showToast("كلمة المرور ضعيفة","اختاري 8 أحرف أو أكثر.");return;}
+  if(newPassword!==confirmPassword){showToast("كلمتا المرور غير متطابقتين","تأكدي من كلمة المرور الجديدة.");return;}
+  try{
+    if(button){button.disabled=true;button.textContent="جارٍ الحفظ...";}
+    const {data,error}=await supabaseClient.functions.invoke("super-service",{body:{action:"activate_client_account",email,activationCode,newPassword}});
+    if(error)throw error;
+    if(!data?.success)throw new Error(data?.error||"تعذر تفعيل الحساب.");
+    closeAccountActivationModal();
+    document.getElementById("loginEmail").value=email;
+    document.getElementById("loginPassword").value=newPassword;
+    showToast("تمت العملية","تم تعيين كلمة المرور. يمكنك الآن تسجيل الدخول.");
+  }catch(error){console.error("ACCOUNT ACTIVATION ERROR",error);showToast("تعذر تغيير كلمة المرور",error?.message||"تحققي من البيانات.");}
+  finally{if(button){button.disabled=false;button.textContent="حفظ كلمة المرور";}}
+}
+
 /* =========================================================
    DOM READY
 ========================================================= */
@@ -1279,6 +1330,8 @@ document.addEventListener(
                     "submit",
                     handleLogin
                 );
+
+            document.getElementById("activationForm")?.addEventListener("submit", handleAccountActivation);
 
             setupMessageEvents();
             setupNotificationEvents();
