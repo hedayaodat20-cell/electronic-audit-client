@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -821,6 +822,23 @@
 
             </section>
 
+            <!-- REPORTS FROM AUDITOR -->
+            <section id="reportsSection" class="glass-panel rounded-3xl p-6 sm:p-8 text-white">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-5 border-b border-white/10">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center border border-cyan-400/30">
+                            <i data-lucide="file-bar-chart-2" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-black text-white">تقارير فريق التدقيق</h2>
+                            <p class="text-xs text-cyan-200/70 mt-1">التقارير الصادرة لهذه الشركة فقط من فريق التدقيق.</p>
+                        </div>
+                    </div>
+                    <span id="reportsCountBadge" class="text-[10px] text-cyan-200/60"></span>
+                </div>
+                <div id="clientReportsContainer" class="space-y-3"></div>
+            </section>
+
             <!-- UPLOAD -->
             <section
                 id="uploadSection"
@@ -882,6 +900,25 @@
 
                 </div>
 
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <button
+                        type="button"
+                        onclick="selectSpecialRequest('bank_statements')"
+                        class="bg-white/10 hover:bg-cyan-500/15 border border-white/10 text-cyan-100 font-bold px-4 py-2.5 rounded-2xl text-xs transition"
+                    >
+                        <i data-lucide="landmark" class="w-4 h-4 inline-block align-middle ml-1"></i>
+                        رفع كشوفات الحسابات البنكية
+                    </button>
+
+                    <button
+                        type="button"
+                        onclick="selectSpecialRequest('trial_balance')"
+                        class="bg-white/10 hover:bg-cyan-500/15 border border-white/10 text-cyan-100 font-bold px-4 py-2.5 rounded-2xl text-xs transition"
+                    >
+                        <i data-lucide="table-2" class="w-4 h-4 inline-block align-middle ml-1"></i>
+                        رفع ميزان المراجعة
+                    </button>
+                </div>
 
                 <div
                     id="dropZone"
@@ -1208,6 +1245,7 @@ let clientMessages = [];
 let unreadMessagesCount = 0;
 
 let clientNotifications = [];
+let clientReports = [];
 
 let selectedFiles = [];
 let selectedRequestId = null;
@@ -1218,6 +1256,7 @@ let documentsRealtimeChannel = null;
 let requestsRealtimeChannel = null;
 let messagesRealtimeChannel = null;
 let notificationsRealtimeChannel = null;
+let reportsRealtimeChannel = null;
 
 let toastTimer = null;
 
@@ -1339,6 +1378,7 @@ async function openClientSession(
     await loadClientMessages();
 
     await loadClientNotifications();
+    await loadClientReports();
 
     await startClientRealtime();
 
@@ -1639,6 +1679,92 @@ async function loadClientData() {
 }
 
 
+
+
+/* =========================================================
+   REPORTS FROM AUDITOR
+========================================================= */
+
+async function loadClientReports() {
+    if (!currentClient?.id) return;
+    const { data, error } = await supabaseClient
+        .from("audit_reports")
+        .select("id,client_id,title,report_type,status,summary,content,file_path,file_name,created_at,updated_at,period,delivered_at")
+        .eq("client_id", currentClient.id)
+        .in("status", ["issued", "delivered"])
+        .order("created_at", { ascending: false });
+    if (error) {
+        console.error("CLIENT REPORTS LOAD ERROR:", error);
+        return;
+    }
+    clientReports = (data || []).map(report => ({
+        ...report,
+        type: report.report_type || "تقرير",
+        delivery_note: report.content || ""
+    }));
+    renderClientReports();
+}
+
+function renderClientReports() {
+    const container = document.getElementById("clientReportsContainer");
+    if (!container) return;
+    const badge = document.getElementById("reportsCountBadge");
+    if (badge) badge.textContent = `${clientReports.length} تقرير`;
+    if (!clientReports.length) {
+        container.innerHTML = `
+            <div class="text-center py-12 px-5 rounded-3xl border border-dashed border-white/10 bg-black/20">
+                <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-300">
+                    <i data-lucide="file-x-2" class="w-6 h-6"></i>
+                </div>
+                <p class="text-sm font-bold text-white">لا توجد تقارير مستلمة</p>
+                <p class="text-[10px] text-cyan-200/50 mt-2">عند إصدار تقرير لهذه الشركة وتسليمه سيظهر هنا تلقائيًا.</p>
+            </div>`;
+        lucide.createIcons();
+        return;
+    }
+    container.innerHTML = clientReports.map(report => `
+        <div class="glass-menu-item rounded-2xl p-5 border border-white/10">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <h3 class="text-sm font-black text-white">${escapeHTML(report.title)}</h3>
+                        <span class="text-[9px] px-2 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/20 text-cyan-200">${escapeHTML(report.type || "تقرير")}</span>
+                    </div>
+                    <p class="text-xs text-cyan-200/70 leading-relaxed">${escapeHTML(report.summary || "لا يوجد ملخص.")}</p>
+                    <p class="text-[9px] text-cyan-200/40 mt-3">${escapeHTML(formatSupabaseDate(report.created_at))}${report.delivered_at ? " • تم التسليم" : ""}</p>
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    <button type="button" class="bg-white/10 hover:bg-cyan-500/15 border border-white/10 text-cyan-100 font-bold px-4 py-2.5 rounded-xl text-xs" onclick="openClientReport('${escapeAttribute(report.id)}')">
+                        <i data-lucide="eye" class="w-4 h-4 inline-block align-middle ml-1"></i> عرض
+                    </button>
+                </div>
+            </div>
+        </div>`).join("");
+    lucide.createIcons();
+}
+
+async function openClientReport(id) {
+    const report = clientReports.find(r => String(r.id) === String(id));
+    if (!report) return;
+    let fileUrl = null;
+    if (report.file_path) {
+        try {
+            const { data, error } = await supabaseClient.storage
+                .from("audit-reports")
+                .createSignedUrl(report.file_path, 60 * 60 * 24 * 30);
+            if (!error) fileUrl = data?.signedUrl || null;
+        } catch (_) {}
+    }
+    const modal = document.getElementById("docModal");
+    document.getElementById("modalFileName") && (document.getElementById("modalFileName").textContent = report.title || "تقرير");
+    document.getElementById("modalFileDate") && (document.getElementById("modalFileDate").textContent = `${report.type || "تقرير"} • ${formatSupabaseDate(report.created_at)}`);
+    document.getElementById("modalStatusBadge") && (document.getElementById("modalStatusBadge").innerHTML = '<span class="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/20 text-emerald-300 text-[10px] font-bold">صادر من فريق التدقيق</span>');
+    document.getElementById("modalRequestName") && (document.getElementById("modalRequestName").textContent = report.summary || "لا يوجد ملخص");
+    document.getElementById("modalNotes") && (document.getElementById("modalNotes").innerHTML = `${escapeHTML(report.delivery_note || "لا توجد ملاحظات.")} ${fileUrl ? `<br><br><a href="${escapeAttribute(fileUrl)}" target="_blank" rel="noopener" class="text-cyan-300 font-bold">فتح ملف التقرير</a>` : ""}`);
+    modal?.classList.remove("hidden");
+}
+
+
 /* =========================================================
    NOTIFICATIONS
 ========================================================= */
@@ -1691,20 +1817,8 @@ async function loadClientNotifications() {
         return;
     }
 
-    // الإشعارات مخصصة فقط لطلبات المستندات من المدقق.
     clientNotifications =
-        (data || []).filter(
-            function (notification) {
-                const text = `${notification.title || ""} ${notification.message || ""}`.toLowerCase();
-                return (
-                    Boolean(notification.request_id) ||
-                    text.includes("طلب مستند") ||
-                    text.includes("طلب المستند") ||
-                    text.includes("document request") ||
-                    text.includes("new document request")
-                );
-            }
-        );
+        data || [];
 
     renderNotifications();
     updateNotificationBadge();
@@ -1852,19 +1966,6 @@ function updateNotificationBadge() {
 async function markNotificationRead(
     id
 ) {
-
-    const localItem = clientNotifications.find(
-        notification =>
-            String(notification.id) === String(id) &&
-            notification.local_only
-    );
-
-    if (localItem) {
-        localItem.read = true;
-        renderNotifications();
-        updateNotificationBadge();
-        return;
-    }
 
     const {
         error
@@ -2863,42 +2964,10 @@ async function startClientRealtime() {
                     filter:
                         `client_id=eq.${clientId}`
                 },
-                async function (payload) {
+                async function () {
 
                     await loadClientData();
 
-                    if (payload?.eventType === "INSERT" && payload?.new) {
-                        const request = payload.new;
-                        const exists = clientNotifications.some(
-                            notification =>
-                                String(notification.request_id || "") === String(request.id)
-                        );
-
-                        if (!exists) {
-                            clientNotifications.unshift({
-                                id: `request-${request.id}`,
-                                request_id: request.id,
-                                user_id: currentClient?.user_id || null,
-                                client_id: currentClient?.id || null,
-                                audience: "client",
-                                title: "طلب مستند جديد",
-                                message: request.title
-                                    ? `تم طلب المستند: ${request.title}`
-                                    : "تم طلب مستند جديد منك من فريق التدقيق.",
-                                read: false,
-                                created_at: request.created_at || new Date().toISOString(),
-                                local_only: true
-                            });
-
-                            renderNotifications();
-                            updateNotificationBadge();
-                            showToast(
-                                request.title
-                                    ? `تم طلب المستند: ${request.title}`
-                                    : "تم طلب مستند جديد منك من فريق التدقيق."
-                            );
-                        }
-                    }
                 }
             )
             .subscribe(
@@ -3126,18 +3195,6 @@ async function startClientRealtime() {
                         return;
                     }
 
-                    const notificationText = `${row.title || ""} ${row.message || ""}`.toLowerCase();
-                    const isDocumentRequestNotification =
-                        Boolean(row.request_id) ||
-                        notificationText.includes("طلب مستند") ||
-                        notificationText.includes("طلب المستند") ||
-                        notificationText.includes("document request") ||
-                        notificationText.includes("new document request");
-
-                    if (!isDocumentRequestNotification) {
-                        return;
-                    }
-
                     await loadClientNotifications();
 
                     if (
@@ -3164,6 +3221,34 @@ async function startClientRealtime() {
 }
 
 
+    /* ---------- REPORTS ---------- */
+
+    reportsRealtimeChannel =
+        supabaseClient
+            .channel(
+                `client-reports-${clientId}-${suffix}`
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "audit_reports",
+                    filter: `client_id=eq.${clientId}`
+                },
+                async function (payload) {
+                    await loadClientReports();
+                    if (payload?.eventType === "INSERT" || payload?.eventType === "UPDATE") {
+                        const row = payload?.new || {};
+                        showToast(row.title || "تحديث جديد في التقارير");
+                    }
+                }
+            )
+            .subscribe(function(status){
+                console.log("REPORT REALTIME:", status);
+            });
+
+
 async function stopClientRealtime() {
 
     const channels = [
@@ -3174,7 +3259,9 @@ async function stopClientRealtime() {
 
         messagesRealtimeChannel,
 
-        notificationsRealtimeChannel
+        notificationsRealtimeChannel,
+
+        reportsRealtimeChannel
     ];
 
     for (
@@ -3204,6 +3291,9 @@ async function stopClientRealtime() {
         null;
 
     notificationsRealtimeChannel =
+        null;
+
+    reportsRealtimeChannel =
         null;
 }
 
@@ -3407,6 +3497,53 @@ function selectRequestForUpload(
         ?.scrollIntoView({
             behavior: "smooth"
         });
+}
+
+
+function selectSpecialRequest(type) {
+
+    const keywords =
+        type === "bank_statements"
+            ? [
+                "كشف حساب",
+                "كشوفات الحساب",
+                "الحسابات البنكية",
+                "bank statement",
+                "bank statements"
+            ]
+            : [
+                "ميزان المراجعة",
+                "trial balance"
+            ];
+
+    const request =
+        documentRequests.find(
+            function (item) {
+
+                const haystack =
+                    `${item.title || ""} ${item.description || ""}`.toLowerCase();
+
+                return (
+                    keywords.some(
+                        function (keyword) {
+                            return haystack.includes(keyword.toLowerCase());
+                        }
+                    ) &&
+                    ["required", "revision", "additional"].includes(item.status)
+                );
+            }
+        );
+
+    if (!request) {
+        showToast(
+            type === "bank_statements"
+                ? "لا يوجد طلب مفتوح لكشوفات الحسابات البنكية"
+                : "لا يوجد طلب مفتوح لميزان المراجعة"
+        );
+        return;
+    }
+
+    selectRequestForUpload(request.id);
 }
 
 
@@ -3826,63 +3963,6 @@ async function uploadFiles() {
    REQUESTS
 ========================================================= */
 
-function isBankStatementRequest(request) {
-    const text = `${request?.title || ""} ${request?.description || ""}`.toLowerCase();
-    return [
-        "كشف حساب",
-        "كشوفات الحساب",
-        "الحسابات البنكية",
-        "bank statement",
-        "bank statements",
-        "bank_statement",
-        "bank-statements"
-    ].some(keyword => text.includes(keyword.toLowerCase()));
-}
-
-function isReceivablesDetailRequest(request) {
-    const text = `${request?.title || ""} ${request?.description || ""}`.toLowerCase();
-    return [
-        "تفاصيل الذمم المدينة",
-        "الذمم المدينة",
-        "accounts receivable details",
-        "accounts receivable"
-    ].some(keyword => text.includes(keyword.toLowerCase()));
-}
-
-function requestStatusPriority(status) {
-    return { required: 0, revision: 1, additional: 2, uploaded: 3, review: 4, accepted: 5 }[status] ?? 99;
-}
-
-function pickSingleRequest(requests) {
-    return [...requests].sort((a, b) => {
-        const priorityDiff = requestStatusPriority(a.status) - requestStatusPriority(b.status);
-        if (priorityDiff !== 0) return priorityDiff;
-        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-    })[0] || null;
-}
-
-function getVisibleClientRequests() {
-    const singleBankRequest = pickSingleRequest(
-        documentRequests.filter(isBankStatementRequest)
-    );
-    const singleReceivablesRequest = pickSingleRequest(
-        documentRequests.filter(isReceivablesDetailRequest)
-    );
-
-    const bankId = singleBankRequest ? String(singleBankRequest.id) : null;
-    const receivablesId = singleReceivablesRequest ? String(singleReceivablesRequest.id) : null;
-
-    return documentRequests.filter(request => {
-        if (isBankStatementRequest(request)) {
-            return String(request.id) === bankId;
-        }
-        if (isReceivablesDetailRequest(request)) {
-            return String(request.id) === receivablesId;
-        }
-        return true;
-    });
-}
-
 function renderRequests() {
 
     const container =
@@ -3894,11 +3974,8 @@ function renderRequests() {
         return;
     }
 
-    const visibleRequests =
-        getVisibleClientRequests();
-
     const completed =
-        visibleRequests.filter(
+        documentRequests.filter(
             function (request) {
 
                 return [
@@ -3917,11 +3994,11 @@ function renderRequests() {
         )
         ?.replaceChildren(
             document.createTextNode(
-                `${completed} من ${visibleRequests.length} مكتملة`
+                `${completed} من ${documentRequests.length} مكتملة`
             )
         );
 
-    if (!visibleRequests.length) {
+    if (!documentRequests.length) {
 
         container.innerHTML = `
             <div class="lg:col-span-2 text-center py-14 text-cyan-200/60 rounded-3xl border border-dashed border-white/10 bg-black/20">
@@ -3954,7 +4031,7 @@ function renderRequests() {
     }
 
     container.innerHTML =
-        visibleRequests
+        documentRequests
             .map(
                 function (request) {
 
@@ -5191,6 +5268,9 @@ supabaseClient.auth.onAuthStateChange(
                 [];
 
             clientNotifications =
+                [];
+
+            clientReports =
                 [];
 
             unreadMessagesCount =
