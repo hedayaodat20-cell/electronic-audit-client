@@ -3351,7 +3351,6 @@ status
 );
 }
 );
-}
 
 
 /* ---------- REPORTS ---------- */
@@ -3380,6 +3379,8 @@ showToast(row.title || "تحديث جديد في التقارير");
 .subscribe(function(status){
 console.log("REPORT REALTIME:", status);
 });
+/* FIX: كتلة تقارير الـ realtime كانت خارج startClientRealtime وتسبب خطأ "clientId is not defined" عند تحميل الصفحة */
+}
 
 
 async function stopClientRealtime() {
